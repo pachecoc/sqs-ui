@@ -11,7 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 )
 
-// extractRegionFromURL tries to extract the AWS region from an SQS queue URL.
+// extractRegionFromURL parses an SQS queue URL to derive the region.
 // Example: https://sqs.eu-central-1.amazonaws.com/123456789012/my-queue
 func extractRegionFromURL(queueURL string) (string, error) {
 	if queueURL == "" {
@@ -29,6 +29,7 @@ func extractRegionFromURL(queueURL string) (string, error) {
 	return matches[1], nil
 }
 
+// NewSQSClient loads AWS config and attempts region inference if absent.
 func NewSQSClient(ctx context.Context, queueURL string) *sqs.Client {
 	// Load default AWS configuration (uses env vars, EC2/EKS metadata, etc.)
 	cfg, err := config.LoadDefaultConfig(ctx)
@@ -40,9 +41,9 @@ func NewSQSClient(ctx context.Context, queueURL string) *sqs.Client {
 	if cfg.Region == "" && queueURL != "" {
 		if region, err := extractRegionFromURL(queueURL); err == nil {
 			cfg.Region = region
-			log.Printf("✅ Inferred region from queue URL: %s", region)
+			log.Printf("inferred region from queue URL: %s", region)
 		} else {
-			log.Printf("⚠️ Could not infer region from queue URL: %v", err)
+			log.Printf("could not infer region from queue URL: %v", err)
 		}
 	}
 

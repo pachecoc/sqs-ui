@@ -3,8 +3,19 @@ package logging
 import (
 	"log/slog"
 	"os"
+	"strings"
 )
 
-func NewLogger() *slog.Logger {
-	return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+// NewLogger builds a slog JSON logger honoring LOG_LEVEL (debug|info|warn|error).
+func NewLogger(levelStr string) *slog.Logger {
+	level := slog.LevelInfo
+	switch strings.ToLower(levelStr) {
+	case "debug":
+		level = slog.LevelDebug
+	case "warn", "warning":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
+	}
+	return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level}))
 }
