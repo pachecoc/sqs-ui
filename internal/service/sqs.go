@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strings"
 	"strconv"
+	"strings"
 	"time"
 	"errors"
 
@@ -13,6 +13,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 )
+
+type Message struct {
+	MessageID string    `json:"id"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"created_at,omitempty"`
+}
 
 type SQSService struct {
 	Client    *sqs.Client
@@ -28,25 +34,19 @@ func NewSQSService(ctx context.Context, client *sqs.Client, name, url string, lo
 		QueueURL:  url,
 		Log:       log,
 	}
-
-	// Resolve the queue URL if only name was provided
 	if s.QueueURL == "" && s.QueueName != "" {
 		qURL, err := s.resolveQueueURL(ctx)
 		if err != nil {
 			s.Log.Error("❌ Failed to resolve queue URL", "queue_name", s.QueueName, "error", err)
 		} else {
 			s.QueueURL = qURL
-			s.Log.Info("✅ Resolved queue URL from name", "queue_name", s.QueueName, "queue_url", qURL)
+			s.Log.Info("✅ Resolved queue URL", "queue_name", s.QueueName, "queue_url", qURL)
 		}
 	}
-
 	return s
 }
 
 func (s *SQSService) resolveQueueURL(ctx context.Context) (string, error) {
-	if s.QueueName == "" {
-		return "", fmt.Errorf("queue name not provided")
-	}
 	out, err := s.Client.GetQueueUrl(ctx, &sqs.GetQueueUrlInput{
 		QueueName: aws.String(s.QueueName),
 	})
@@ -60,17 +60,14 @@ func (s *SQSService) Send(ctx context.Context, msg string) error {
 	if s.QueueURL == "" {
 		return fmt.Errorf("queue URL not set")
 	}
-
 	input := &sqs.SendMessageInput{
 		QueueUrl:    &s.QueueURL,
 		MessageBody: &msg,
 	}
-
 	if isFIFO(s.QueueName) {
 		groupID := "default-group"
 		input.MessageGroupId = &groupID
 	}
-
 	_, err := s.Client.SendMessage(ctx, input)
 	if err != nil {
 		return fmt.Errorf("failed to send message: %w", err)
@@ -107,6 +104,7 @@ func (s *SQSService) Receive(ctx context.Context, max int32) ([]map[string]inter
 
 		resp, err := s.Client.ReceiveMessage(ctx, input)
 		if err != nil {
+
 			// Distinguish between timeout vs API error
 			if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 				return nil, fmt.Errorf("receive operation timed out after 10s: %w", err)
@@ -131,12 +129,10 @@ func (s *SQSService) Receive(ctx context.Context, max int32) ([]map[string]inter
 	return allMsgs, nil
 }
 
-
 func (s *SQSService) Purge(ctx context.Context) error {
 	if s.QueueURL == "" {
 		return fmt.Errorf("queue URL not set")
 	}
-
 	_, err := s.Client.PurgeQueue(ctx, &sqs.PurgeQueueInput{
 		QueueUrl: &s.QueueURL,
 	})
@@ -147,21 +143,12 @@ func (s *SQSService) Purge(ctx context.Context) error {
 	return nil
 }
 
-func isFIFO(name string) bool {
-	return strings.HasSuffix(name, ".fifo")
-}
-
-func (s *SQSService) Info() map[string]interface{} {
-	if s.QueueURL == "" {
-		s.Log.Error("queue URL not set, cannot fetch info")
-		return map[string]interface{}{
-			"status": "error",
-			"error":  "queue URL not set",
-		}
+func (s *SQSService) Info(ctx context.Context) map[string]interface{} {
+	info := map[string]interface{}{
+		"queue_name": s.QueueName,
+		"queue_url":  s.QueueURL,
+		"status":     "ok",
 	}
-
-	ctx := context.Background()
-
 	out, err := s.Client.GetQueueAttributes(ctx, &sqs.GetQueueAttributesInput{
 		QueueUrl: &s.QueueURL,
 		AttributeNames: []types.QueueAttributeName{
@@ -170,39 +157,26 @@ func (s *SQSService) Info() map[string]interface{} {
 			types.QueueAttributeNameApproximateNumberOfMessagesDelayed,
 		},
 	})
-
-	info := map[string]interface{}{
-		"queue_url":  s.QueueURL,
-		"queue_name": s.QueueName,
-		"status":     "ok",
-	}
-
 	if err != nil {
 		s.Log.Error("failed to get queue attributes", "error", err)
 		info["error"] = err.Error()
+		info["status"] = "error"
 		return info
 	}
-
-	// helper for safe int conversion
-	toInt := func(val string) int {
-		if val == "" {
-			return 0
-		}
-		i, err := strconv.Atoi(val)
-		if err != nil {
-			return 0
-		}
-		return i
+	parseInt := func(s string) int64 {
+		n, _ := strconv.ParseInt(s, 10, 64)
+		return n
 	}
-
-	visible := toInt(out.Attributes[string(types.QueueAttributeNameApproximateNumberOfMessages)])
-	notVisible := toInt(out.Attributes[string(types.QueueAttributeNameApproximateNumberOfMessagesNotVisible)])
-	delayed := toInt(out.Attributes[string(types.QueueAttributeNameApproximateNumberOfMessagesDelayed)])
-
+	visible := parseInt(out.Attributes[string(types.QueueAttributeNameApproximateNumberOfMessages)])
+	notVisible := parseInt(out.Attributes[string(types.QueueAttributeNameApproximateNumberOfMessagesNotVisible)])
+	delayed := parseInt(out.Attributes[string(types.QueueAttributeNameApproximateNumberOfMessagesDelayed)])
+	info["number_of_messages"] = visible + notVisible + delayed
 	info["approximate_number_of_messages"] = visible
 	info["approximate_number_of_messages_not_visible"] = notVisible
 	info["approximate_number_of_messages_delayed"] = delayed
-	info["number_of_messages"] = visible + notVisible + delayed
-
 	return info
+}
+
+func isFIFO(name string) bool {
+	return strings.HasSuffix(name, ".fifo")
 }

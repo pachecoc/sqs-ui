@@ -1,31 +1,33 @@
 package config
 
 import (
-	"log"
 	"os"
+	"log/slog"
 )
 
-type Config struct {
-	Port      string
-	QueueURL  string
+type AppConfig struct {
 	QueueName string
+	QueueURL  string
+	Port      string
 }
 
-func Load() *Config {
-	port := getEnv("PORT", "8080")
-	queueURL := os.Getenv("QUEUE_URL")
+func Load(log *slog.Logger) AppConfig {
 	queueName := os.Getenv("QUEUE_NAME")
+	queueURL := os.Getenv("QUEUE_URL")
+	port := os.Getenv("PORT")
 
-	if queueURL == "" && queueName == "" {
-		log.Fatal("Either QUEUE_URL or QUEUE_NAME must be set")
+	if port == "" {
+		port = "8080"
 	}
 
-	return &Config{Port: port, QueueURL: queueURL, QueueName: queueName}
-}
-
-func getEnv(k, def string) string {
-	if v := os.Getenv(k); v != "" {
-		return v
+	if queueName == "" && queueURL == "" {
+		log.Error("missing QUEUE_NAME or QUEUE_URL environment variable")
+		os.Exit(1)
 	}
-	return def
+
+	return AppConfig{
+		QueueName: queueName,
+		QueueURL:  queueURL,
+		Port:      port,
+	}
 }

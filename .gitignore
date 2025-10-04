@@ -30,3 +30,37 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+.git
+helm/
+node_modules/
+*.md
+*.log
+*.swp
+
+# Binaries
+sqs-ui
+*.exe
+*.out
+
+# Build cache
+bin/
+build/
+dist/
+
+# Go module cache
+vendor/
+*.log
+
+# Docker / container
+.dockerignore
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Env
+.env
+.env.local

@@ -127,9 +127,9 @@ Status: ${data.status}
       }
     }
 
-
-    // --- Send Message ---
+    // --- Send Message with delayed refresh and countdown ---
     async function sendMsg() {
+      sendStatus.innerHTML = '<p>⏳ Sending message...</p>';
       const msgBox = document.getElementById('msgInput');
       const msg = msgBox.value.trim();
 
@@ -138,8 +138,6 @@ Status: ${data.status}
         return;
       }
 
-      sendStatus.innerHTML = '<p>⏳ Sending message...</p>';
-
       try {
         const res = await fetch('/api/send', {
           method: 'POST',
@@ -147,35 +145,49 @@ Status: ${data.status}
           body: JSON.stringify({ message: msg })
         });
 
-        if (res.ok) {
-          // ✅ Show success and scheduled update info
-          sendStatus.innerHTML = `
-            <p class="text-green-600 font-semibold">✅ Message sent successfully!</p>
-            <p class="text-gray-600 text-sm">Queue info will refresh in 5 seconds...</p>
-            <p class="text-gray-600 text-sm">⚠️ Be in mind that sometimes AWS takes longer to update it!</p>
-          `;
-
-          // clear input immediately
-          msgBox.value = '';
-
-          // ✅ Immediately mark messages as outdated
-          msgOut.innerHTML = `
-            <p class="text-blue-600 font-semibold">📤 Message sent successfully!</p>
-            <p class="text-yellow-600 font-semibold">⚠️ Messages list is outdated.</p>
-            <p class="text-gray-600 text-sm">Please click <strong>Fetch Messages</strong> to refresh the queue content.</p>
-          `;
-
-          // ⏳ Schedule queue info refresh + status clear
-          setTimeout(() => {
-            fetchInfo();
-            sendStatus.innerHTML = ''; // clear status after refresh
-          }, 5000);
-        } else {
+        if (!res.ok) {
           const text = await res.text();
           sendStatus.innerHTML = `<p class="text-red-600 font-semibold">❌ Failed to send message:</p><pre>${text}</pre>`;
+          return;
         }
+
+        // --- Step 1: Confirm success and clear input immediately ---
+        msgBox.value = '';
+        sendStatus.innerHTML = '<p class="text-green-600 font-semibold mb-1">✅ Message sent successfully!</p>';
+
+        // --- Step 2: Wait 1 second before showing countdown ---
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        let seconds = 8;
+        sendStatus.innerHTML += `<p id="countdownText" class="text-blue-600">⏳ Refreshing queue info and messages in ${seconds}s...</p>`;
+
+        const countdownEl = document.getElementById('countdownText');
+        const countdown = setInterval(() => {
+          seconds--;
+          if (seconds > 0) {
+            countdownEl.textContent = `⏳ Refreshing queue info and messages in ${seconds}s...`;
+          } else {
+            clearInterval(countdown);
+            countdownEl.textContent = "🔄 Refreshing now...";
+            refreshQueueState(); // only now refresh info + messages
+          }
+        }, 1000);
+
       } catch (err) {
         sendStatus.innerHTML = `<p class="text-red-600 font-semibold">⚠️ Error sending message: ${err.message}</p>`;
+      }
+    }
+
+    // --- Refresh Queue Info and Messages together ---
+    async function refreshQueueState() {
+      try {
+        await fetchInfo();
+        await fetchMsgs();
+        sendStatus.innerHTML = '<p class="text-gray-500 italic mt-2">✅ Queue info and messages updated.</p>';
+        // Clear status box after a short delay
+        setTimeout(() => { sendStatus.innerHTML = ''; }, 3000);
+      } catch (err) {
+        sendStatus.innerHTML = `<p class="text-red-600 font-semibold">⚠️ Error refreshing queue: ${err.message}</p>`;
       }
     }
 
