@@ -2,15 +2,15 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>AWS SQS Demo</title>
+  <title>AWS SQS UI</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen">
   <div class="bg-white shadow-md rounded-lg p-6 w-full max-w-lg text-center">
-    <h1 class="text-2xl font-semibold mb-4">📬 AWS SQS Demo</h1>
+    <h1 class="text-2xl font-semibold mb-4">📬 AWS SQS UI</h1>
     <div class="space-x-2 mb-4">
-      <button onclick="sendMsg()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">Send Message</button>
-      <button onclick="fetchMsgs()" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">Fetch Messages</button>
+      <button onclick="sendMsg()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">Send</button>
+      <button onclick="fetchMsgs()" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">Fetch</button>
       <button onclick="getInfo()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded">Info</button>
     </div>
     <pre id="out" class="text-left bg-gray-50 p-3 rounded text-sm h-64 overflow-auto"></pre>
@@ -18,7 +18,7 @@
 
   <script>
     async function sendMsg() {
-      const msg = prompt("Enter message:", "Hello from SQS demo!");
+      const msg = prompt("Enter message:", "Hello from SQS UI!");
       const res = await fetch('/send?msg=' + encodeURIComponent(msg || ''));
       document.getElementById('out').innerText = await res.text();
     }

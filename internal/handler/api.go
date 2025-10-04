@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"sqs-demo/internal/service"
 
+	"github.com/pachecoc/sqs-ui/internal/service"
 	"log/slog"
 )
 
@@ -22,7 +22,7 @@ func NewAPIHandler(sqs *service.SQSService, log *slog.Logger) *APIHandler {
 func (h *APIHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	msg := r.URL.Query().Get("msg")
 	if msg == "" {
-		msg = "Hello from SQS Demo!"
+		msg = "Hello from SQS UI!"
 	}
 	if err := h.SQS.Send(context.TODO(), msg); err != nil {
 		h.Log.Error("failed to send message", "err", err)

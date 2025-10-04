@@ -1,11 +1,25 @@
-FROM golang:1.23 AS builder
-WORKDIR /app
-COPY . .
-RUN go mod download && CGO_ENABLED=0 GOOS=linux go build -o sqs-demo ./cmd/server
+# syntax=docker/dockerfile:1.6
 
-FROM gcr.io/distroless/base-debian12
-WORKDIR /app
-COPY --from=builder /app/sqs-demo .
-COPY internal/templates ./internal/templates
+### --- Build Stage ---
+FROM golang:1.24-alpine AS builder
+WORKDIR /src
+
+# Optimize module caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy app source
+COPY . .
+
+# Build statically
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o /out/sqs-ui ./cmd/server
+
+### --- Final Stage ---
+FROM gcr.io/distroless/static-debian12
+WORKDIR /
+COPY --from=builder /out/sqs-ui /sqs-ui
+COPY internal/templates /internal/templates
+
+USER nonroot:nonroot
 EXPOSE 8080
-ENTRYPOINT ["/app/sqs-demo"]
+ENTRYPOINT ["/sqs-ui"]

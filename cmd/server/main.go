@@ -2,17 +2,17 @@ package main
 
 import (
 	"context"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
-	"sqs-demo/internal/awsclient"
-	"sqs-demo/internal/config"
-	"sqs-demo/internal/handler"
-	"sqs-demo/internal/logging"
-	"sqs-demo/internal/service"
 	"syscall"
 	"time"
+
+	"github.com/pachecoc/sqs-ui/internal/awsclient"
+	"github.com/pachecoc/sqs-ui/internal/config"
+	"github.com/pachecoc/sqs-ui/internal/handler"
+	"github.com/pachecoc/sqs-ui/internal/logging"
+	"github.com/pachecoc/sqs-ui/internal/service"
 )
 
 func main() {
