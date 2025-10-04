@@ -4,32 +4,210 @@
   <meta charset="UTF-8" />
   <title>AWS SQS UI</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 </head>
-<body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen">
-  <div class="bg-white shadow-md rounded-lg p-6 w-full max-w-lg text-center">
-    <h1 class="text-2xl font-semibold mb-4">📬 AWS SQS UI</h1>
-    <div class="space-x-2 mb-4">
-      <button onclick="sendMsg()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">Send</button>
-      <button onclick="fetchMsgs()" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">Fetch</button>
-      <button onclick="getInfo()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded">Info</button>
+
+<body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen px-4">
+  <div class="bg-white shadow-md rounded-lg p-6 w-full max-w-4xl text-center">
+    <h1 class="text-3xl font-semibold mb-6">📬 AWS SQS UI</h1>
+
+    <!-- Fetch Info Button -->
+    <div class="flex justify-center mb-4">
+      <button onclick="fetchInfo()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded shadow">
+        Fetch Queue Info
+      </button>
     </div>
-    <pre id="out" class="text-left bg-gray-50 p-3 rounded text-sm h-64 overflow-auto"></pre>
+
+    <!-- Queue Info -->
+    <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-left text-sm font-mono mb-6">
+      <h2 class="text-lg font-semibold mb-2">ℹ️ Queue Info</h2>
+      <div id="infoOut" class="whitespace-pre-wrap break-words text-sm text-gray-700">
+        <p class="text-gray-400 italic">Click "Fetch Queue Info" to view queue details...</p>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="flex flex-wrap justify-center gap-3 mb-6">
+      <button onclick="fetchMsgs()" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded shadow">
+        Fetch Messages
+      </button>
+      <button onclick="purgeQueue()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded shadow">
+        Purge Queue
+      </button>
+    </div>
+
+    <!-- Messages Section -->
+    <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-left text-sm font-mono h-96 overflow-auto mb-6">
+      <h2 class="text-lg font-semibold mb-2">📥 Messages</h2>
+      <div id="msgOut" class="whitespace-pre-wrap break-words text-sm text-gray-700">
+        <p class="text-gray-400 italic">No messages fetched yet...</p>
+      </div>
+    </div>
+
+    <!-- Send Message Section -->
+    <div class="text-left">
+      <h2 class="text-xl font-semibold mb-2">Send a Message</h2>
+      <textarea id="msgInput" rows="4"
+        class="w-full border border-gray-300 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 mb-2 resize-y"
+        placeholder="Type your message here..."></textarea>
+      <div id="sendStatus" class="text-sm mb-2"></div>
+      <div class="flex justify-end">
+        <button onclick="sendMsg()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded shadow">
+          Send Message
+        </button>
+      </div>
+    </div>
   </div>
 
   <script>
-    async function sendMsg() {
-      const msg = prompt("Enter message:", "Hello from SQS UI!");
-      const res = await fetch('/send?msg=' + encodeURIComponent(msg || ''));
-      document.getElementById('out').innerText = await res.text();
+    const msgOut = document.getElementById('msgOut');
+    const infoOut = document.getElementById('infoOut');
+    const sendStatus = document.getElementById('sendStatus');
+
+    function prettyJSON(data) {
+      try {
+        if (typeof data === "string") data = JSON.parse(data);
+        return JSON.stringify(data, null, 2);
+      } catch {
+        return data;
+      }
     }
+
+    // --- Fetch Queue Info ---
+    async function fetchInfo() {
+      infoOut.innerHTML = '<p>⏳ Fetching queue info...</p>';
+      try {
+        const res = await fetch('/info', { headers: { 'Accept': 'application/json' } });
+        const text = await res.text();
+        const data = JSON.parse(text);
+
+        const formatted = `
+Queue Name: ${data.queue_name}
+Queue URL: ${data.queue_url}
+Total Messages: ${data.number_of_messages ?? "N/A"}
+Status: ${data.status}
+        `;
+
+        infoOut.innerHTML =
+          '<pre class="bg-gray-800 text-gray-200 rounded p-3 text-left overflow-auto whitespace-pre-wrap break-words">' +
+          formatted.trim() + '</pre>';
+      } catch (err) {
+        infoOut.innerHTML = `<p class="text-red-600 font-semibold">⚠️ Error fetching info: ${err.message}</p>`;
+      }
+    }
+
+    // --- Fetch Messages (one call: all messages already aggregated) ---
     async function fetchMsgs() {
-      const res = await fetch('/messages');
-      document.getElementById('out').innerText = await res.text();
+      msgOut.innerHTML = '<p>📥 Fetching messages...</p>';
+      try {
+        const res = await fetch('/api/messages', { headers: { 'Accept': 'application/json' } });
+        const text = await res.text();
+
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          throw new Error(text); // not JSON → backend error (like timeout)
+        }
+
+        if (!Array.isArray(data) || data.length === 0) {
+          msgOut.innerHTML = '<p class="text-gray-500 italic">📭 No messages in the queue.</p>';
+          return;
+        }
+
+        msgOut.innerHTML =
+          `<p class="text-gray-600 mb-2">Fetched ${data.length} message${data.length > 1 ? 's' : ''}</p>` +
+          '<pre class="bg-black text-gray-200 rounded p-3 text-left overflow-auto whitespace-pre-wrap break-words">' +
+          prettyJSON(data) + '</pre>';
+      } catch (err) {
+        msgOut.innerHTML = `
+          <p class="text-red-600 font-semibold">⚠️ Error fetching messages:</p>
+          <pre class="text-gray-800 bg-yellow-50 border border-yellow-200 rounded p-2">${err.message}</pre>
+          <p class="text-gray-600 text-sm mt-1">Please try again or contact support if this persists.</p>`;
+      }
     }
-    async function getInfo() {
-      const res = await fetch('/info');
-      document.getElementById('out').innerText = await res.text();
+
+
+    // --- Send Message ---
+    async function sendMsg() {
+      const msgBox = document.getElementById('msgInput');
+      const msg = msgBox.value.trim();
+
+      if (!msg) {
+        sendStatus.innerHTML = '<p class="text-red-600">⚠️ Please enter a message before sending.</p>';
+        return;
+      }
+
+      sendStatus.innerHTML = '<p>⏳ Sending message...</p>';
+
+      try {
+        const res = await fetch('/api/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: msg })
+        });
+
+        if (res.ok) {
+          // ✅ Show success and scheduled update info
+          sendStatus.innerHTML = `
+            <p class="text-green-600 font-semibold">✅ Message sent successfully!</p>
+            <p class="text-gray-600 text-sm">Queue info will refresh in 5 seconds...</p>
+            <p class="text-gray-600 text-sm">⚠️ Be in mind that sometimes AWS takes longer to update it!</p>
+          `;
+
+          // clear input immediately
+          msgBox.value = '';
+
+          // ✅ Immediately mark messages as outdated
+          msgOut.innerHTML = `
+            <p class="text-blue-600 font-semibold">📤 Message sent successfully!</p>
+            <p class="text-yellow-600 font-semibold">⚠️ Messages list is outdated.</p>
+            <p class="text-gray-600 text-sm">Please click <strong>Fetch Messages</strong> to refresh the queue content.</p>
+          `;
+
+          // ⏳ Schedule queue info refresh + status clear
+          setTimeout(() => {
+            fetchInfo();
+            sendStatus.innerHTML = ''; // clear status after refresh
+          }, 5000);
+        } else {
+          const text = await res.text();
+          sendStatus.innerHTML = `<p class="text-red-600 font-semibold">❌ Failed to send message:</p><pre>${text}</pre>`;
+        }
+      } catch (err) {
+        sendStatus.innerHTML = `<p class="text-red-600 font-semibold">⚠️ Error sending message: ${err.message}</p>`;
+      }
     }
+
+    // --- Purge Queue ---
+    async function purgeQueue() {
+      if (!confirm("⚠️ This will delete all messages from the queue. Continue?")) return;
+      try {
+        const res = await fetch('/api/purge', { method: 'POST' });
+        if (res.ok) {
+          msgOut.innerHTML = '<p class="text-yellow-600 font-semibold mb-2">🧹 Queue purged successfully!</p>';
+          fetchInfo(); // refresh queue info after purge
+        } else {
+          const text = await res.text();
+          msgOut.innerHTML = `<p class="text-red-600 font-semibold">❌ Failed to purge queue:</p><pre>${text}</pre>`;
+        }
+      } catch (err) {
+        msgOut.innerHTML = `<p class="text-red-600 font-semibold">⚠️ Error purging queue: ${err.message}</p>`;
+      }
+    }
+
+    // --- Auto-fetch queue info when page loads ---
+    window.addEventListener('DOMContentLoaded', async () => {
+      infoOut.innerHTML = '<p>⏳ Loading queue info...</p>';
+      try {
+        await fetchInfo();
+      } catch (err) {
+        infoOut.innerHTML = `
+          <p class="text-red-600 font-semibold">⚠️ Failed to load queue info on startup:</p>
+          <pre class="text-gray-800 bg-yellow-50 border border-yellow-200 rounded p-2 whitespace-pre-wrap break-words">${err.message}</pre>
+        `;
+      }
+    });
   </script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 # --------------------------------------
-# 🧱 SQS-UI  |  Docker Hub Edition
+# 🧱 SQS-UI  |  Local Multi-Arch Build (No Login Needed)
 # --------------------------------------
 
 DOCKER_USER ?= pachecoc
@@ -26,66 +26,69 @@ tidy:
 	go mod tidy
 
 verify:
+	@echo "🔍 Verifying module dependencies..."
 	go mod verify
 
 build-local:
+	@echo "🔨 Building local binary..."
 	CGO_ENABLED=0 go build -o bin/sqs-ui ./cmd/server
 
 run-local:
-	QUEUE_NAME=my-demo-queue go run ./cmd/server
+	@echo "🏃 Running sqs-ui locally..."
+	QUEUE_NAME=example go run ./cmd/server
 
 clean-go:
+	@echo "🧹 Cleaning Go artifacts..."
 	rm -rf bin/ go.sum
 
 # --------------------------------------
-# 🐳 Docker Build & Push
+# 🐳 Docker Build & Push (Multi-Arch Default)
 # --------------------------------------
-build:
-	@echo "🚧 Building $(IMAGE_TAGGED)..."
-	docker build -t $(IMAGE_TAGGED) .
-
-run:
-	docker run --rm -it -p 8080:8080 -e QUEUE_NAME=my-demo-queue $(IMAGE_TAGGED)
 
 builder:
-	@echo "🧱 Creating buildx builder..."
+	@echo "🧱 Ensuring buildx builder exists..."
 	-docker buildx create --name $(BUILDER) --use
 	docker buildx inspect --bootstrap
 
-buildx: builder
-	@echo "🚀 Building multi-arch image..."
-	docker buildx build --platform $(PLATFORMS) -t $(IMAGE_TAGGED) --push .
+# Build & push multi-arch image directly (no login)
+build: builder
+	@echo "🚀 Building and pushing multi-arch image to Docker Hub..."
+	docker buildx build \
+		--platform $(PLATFORMS) \
+		-t $(IMAGE_TAGGED) \
+		--push .
+	@echo "✅ Multi-arch image pushed: $(IMAGE_TAGGED)"
 
-login:
-	@echo "🔐 Logging into Docker Hub..."
-	@if [ -z "$$DOCKER_TOKEN" ]; then echo "❌ DOCKER_TOKEN not set"; exit 1; fi
-	echo $$DOCKER_TOKEN | docker login -u $(DOCKER_USER) --password-stdin
+# Push target (alias for build)
+push: build
+	@echo "✅ Multi-arch image successfully pushed: $(IMAGE_TAGGED)"
 
-push:
-	@echo "📤 Pushing $(IMAGE_TAGGED)..."
-	docker push $(IMAGE_TAGGED)
-
-pushx: login buildx
-	@echo "✅ Multi-arch image pushed to Docker Hub."
-
-# --------------------------------------
-# 🚀 Release Version
-# --------------------------------------
+# Publish both latest and versioned tags
 release:
-	@if [ "$(TAG)" = "latest" ]; then echo "❌ You must specify a TAG (e.g., make release TAG=0.1.0)"; exit 1; fi
-	@echo "🏷  Releasing version $(TAG)..."
-	docker tag $(IMAGE_NAME):latest $(IMAGE_NAME):$(TAG)
-	@echo "📤 Pushing both 'latest' and '$(TAG)' tags..."
-	docker push $(IMAGE_NAME):latest
-	docker push $(IMAGE_NAME):$(TAG)
-	@echo "✅ Successfully published: $(IMAGE_NAME):$(TAG)"
+	@if [ "$(TAG)" = "latest" ]; then echo "❌ You must specify TAG (e.g., make release TAG=0.1.0)"; exit 1; fi
+	@echo "🏷️  Releasing version $(TAG)..."
+	@$(MAKE) push TAG=$(TAG)
+	@echo "📤 Also tagging as latest..."
+	docker buildx imagetools create -t $(IMAGE_NAME):latest $(IMAGE_NAME):$(TAG)
+	@echo "✅ Published $(IMAGE_NAME):$(TAG) and latest"
+
+# --------------------------------------
+# 🔍 Utility Commands
+# --------------------------------------
+
+check:
+	@echo "🔎 Docker info:"
+	@docker info --format '  Username: {{.RegistryConfig.IndexConfigs."docker.io".Name}}' || echo "  Not logged in"
+	@echo
+	@echo "🧩 Architectures available for $(IMAGE_NAME):"
+	@docker buildx imagetools inspect $(IMAGE_NAME):$(TAG) --format '{{json .Manifest.Manifests}}' 2>/dev/null | jq '.[].platform' || echo "  No manifest found."
 
 # --------------------------------------
 # 🧹 Cleanup
 # --------------------------------------
 clean:
-	@echo "🧹 Cleaning local images..."
+	@echo "🧹 Cleaning local Docker images and Go artifacts..."
 	-docker rmi $(IMAGE_TAGGED) $(IMAGE_NAME):latest 2>/dev/null || true
 	@$(MAKE) clean-go
 
-.PHONY: all init tidy verify build-local run-local clean-go build run builder buildx login push pushx release clean
+.PHONY: all init tidy verify build-local run-local clean-go builder build push release check clean

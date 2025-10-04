@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"html/template"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -11,43 +13,71 @@ import (
 	"github.com/pachecoc/sqs-ui/internal/awsclient"
 	"github.com/pachecoc/sqs-ui/internal/config"
 	"github.com/pachecoc/sqs-ui/internal/handler"
-	"github.com/pachecoc/sqs-ui/internal/logging"
 	"github.com/pachecoc/sqs-ui/internal/service"
 )
 
 func main() {
-	ctx := context.Background()
-	log := logging.NewLogger()
+	// --- JSON structured logger ---
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	logger.Info("🚀 Starting SQS UI Server...")
 
+	// --- Load configuration ---
 	cfg := config.Load()
-	client := awsclient.NewSQSClient(ctx)
-	sqsSvc := service.NewSQSService(ctx, client, cfg.QueueName, cfg.QueueURL, log)
-	api := handler.NewAPIHandler(sqsSvc, log)
+
+	// --- AWS SQS client ---
+	ctx := context.Background()
+	sqsClient := awsclient.NewSQSClient(ctx, cfg.QueueURL)
+
+	// --- SQS service ---
+	sqsSvc := service.NewSQSService(ctx, sqsClient, cfg.QueueName, cfg.QueueURL, logger)
+
+	// --- Handlers ---
+	apiHandler := handler.NewAPIHandler(sqsSvc, logger)
+
+	tmpl, err := template.ParseFiles("internal/templates/index.html")
+	if err != nil {
+		logger.Error("failed to load HTML template", "error", err)
+		os.Exit(1)
+	}
+	uiHandler := handler.NewUIHandler(tmpl, logger)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", handler.ServeUI)
-	mux.HandleFunc("/send", api.SendMessage)
-	mux.HandleFunc("/messages", api.GetMessages)
-	mux.HandleFunc("/info", api.Info)
+	apiHandler.RegisterRoutes(mux)
+	uiHandler.RegisterRoutes(mux)
 
-	srv := &http.Server{Addr: ":" + cfg.Port, Handler: mux}
+	port := cfg.Port
+	if port == "" {
+		port = "8080"
+	}
+	addr := ":" + port
+
+	server := &http.Server{
+		Addr:    addr,
+		Handler: mux,
+	}
+
+	// --- Graceful shutdown setup ---
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
-		log.Info("server starting", "port", cfg.Port)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Error("server error", "err", err)
+		logger.Info("🌐 Server listening", "address", addr)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error("server failed", "error", err)
 			os.Exit(1)
 		}
 	}()
 
-	// graceful shutdown
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	// Wait for termination
 	<-stop
-	log.Info("shutting down server...")
+	logger.Info("🛑 Shutdown signal received, stopping server...")
 
-	ctxTimeout, cancel := context.WithTimeout(ctx, 5*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	_ = srv.Shutdown(ctxTimeout)
-	log.Info("server stopped gracefully")
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		logger.Error("❌ Server forced to shutdown", "error", err)
+	} else {
+		logger.Info("✅ Server stopped gracefully")
+	}
 }
