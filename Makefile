@@ -54,7 +54,9 @@ clean-go:
 
 builder:
 	@echo "🧱 Ensuring buildx builder exists..."
-	-docker buildx create --name $(BUILDER) --use
+	@if ! docker buildx inspect $(BUILDER) >/dev/null 2>&1; then \
+		docker buildx create --name $(BUILDER) --use; \
+	fi
 	docker buildx inspect --bootstrap
 
 # Build & push multi-arch image directly (no login)
@@ -87,23 +89,26 @@ release:
 	@docker buildx imagetools create -t $(IMAGE_NAME):latest $(IMAGE_NAME):$(TAG)
 
 	# --- Git Tag ---
-	@echo "🔖 Creating/updating Git tag v$(TAG)..."
-	-git tag -d v$(TAG) 2>/dev/null || true
-	git tag -a v$(TAG) -m "Release v$(TAG)"
-	git push origin :refs/tags/v$(TAG) 2>/dev/null || true
-	git push origin v$(TAG)
+	@echo "🔖 Creating/updating Git tag $(TAG)..."
+	-git tag -d $(TAG) 2>/dev/null || true
+	git tag -a $(TAG) -m "Release $(TAG)"
+	git push origin :refs/tags/$(TAG) 2>/dev/null || true
+	git push origin $(TAG)
 
 	# --- GitHub Release ---
 	@if command -v gh >/dev/null 2>&1; then \
-		echo "🚀 Creating or updating GitHub release v$(TAG)..."; \
-		gh release delete v$(TAG) --yes 2>/dev/null || true; \
-		gh release create v$(TAG) --title "Release v$(TAG)" \
-			--notes "Automated release for version v$(TAG)\nCommit: $(GIT_COMMIT)\nBuilt: $(BUILD_DATE)" || true; \
+		echo "🚀 Creating or updating GitHub release $(TAG)..."; \
+		gh release delete $(TAG) --yes 2>/dev/null || true; \
+		gh release create $(TAG) --title "Release $(TAG)" \
+			--notes "$$(printf '%s\n%s\n\n🧱 Docker Image:\n```bash\ndocker pull %s:%s\ndocker run --rm %s:%s --version\n```\n\nMulti-arch: linux/amd64, linux/arm64' \
+			'Automated release for version $(TAG)' \
+			'Built Date: $(BUILD_DATE)' \
+			'$(IMAGE_NAME)' '$(TAG)' '$(IMAGE_NAME)' '$(TAG)')" || true; \
 	else \
 		echo "⚠️ GitHub CLI (gh) not installed — skipping GitHub release."; \
 	fi
 
-	@echo "✅ Published Docker + Git + GitHub release for v$(TAG)"
+	@echo "✅ Published Docker + Git + GitHub release for $(TAG)"
 
 # --------------------------------------
 # 🔍 Utility Commands
