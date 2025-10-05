@@ -1,0 +1,14 @@
+.git
+.gitignore
+Dockerfile
+bin
+dist
+build
+coverage*
+*.md
+*.log
+node_modules
+*.swp
+*.swo
+.env
+.env.*
