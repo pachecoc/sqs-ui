@@ -152,7 +152,7 @@
         msgOut.innerHTML = `
           <p class="text-red-600 font-semibold">Error fetching messages:</p>
           <pre class="text-gray-800 bg-yellow-50 border border-yellow-200 rounded p-2">${err.message}</pre>
-          <p class="text-gray-600 text-sm mt-1">Please try again later.</p>`;
+          <p class="text-gray-600 text-sm mt-1">Please try again later or check logs for error.</p>`;
         debug('fetchMsgs error', err);
       }
     }
@@ -287,9 +287,6 @@
         debug('initial fetchInfo error', err);
       }
     });
-  </script>
-</body>
-</html>
   </script>
 </body>
 </html>

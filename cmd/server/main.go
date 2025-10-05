@@ -11,13 +11,14 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
-	appconfig "github.com/pachecoc/sqs-ui/internal/config"
+	"github.com/pachecoc/sqs-ui/internal/settings"
 	"github.com/pachecoc/sqs-ui/internal/handler"
 	"github.com/pachecoc/sqs-ui/internal/logging"
 	"github.com/pachecoc/sqs-ui/internal/service"
 )
 
 func main() {
+
 	// Context cancelled on SIGINT/SIGTERM
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -26,13 +27,14 @@ func main() {
 	baseLog := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
 	// Load config from env
-	cfg := appconfig.Load(baseLog)
+	appCfg := settings.Load(baseLog)
 
 	// Rebuild logger with configured level
-	log := logging.NewLogger(cfg.LogLevel)
+	log := logging.NewLogger(appCfg.LogLevel)
 
 	// Load AWS default config
 	awsCfg, err := config.LoadDefaultConfig(ctx)
+
 	if err != nil {
 		log.Error("failed to load AWS config", "error", err)
 		os.Exit(1)
@@ -45,16 +47,14 @@ func main() {
 	svc := service.NewSQSService(
 		ctx,
 		sqsClient,
-		cfg.QueueName,
-		cfg.QueueURL,
+		appCfg.QueueName,
+		appCfg.QueueURL,
 		log,
-		cfg.DefaultMessageGroupID,
-		cfg.RequestTimeout,
-		cfg.ReceiveMaxMessages,
-		cfg.ReceiveWaitSeconds,
-		cfg.ReceiveVisibilityTimeout,
-		cfg.ReceiveSingleCall,
 	)
+
+	// Print appCfg object
+	// log.Info("configuration", "config", svc)
+	// os.Exit(0)
 
 	// HTTP API
 	api := handler.NewAPIHandler(svc, log)
@@ -62,17 +62,17 @@ func main() {
 	api.RegisterRoutes(mux)
 	mux.Handle("/", http.FileServer(http.Dir("./web")))
 
-	// HTTP server with sane timeouts
+	// HTTP server with timeouts
 	server := &http.Server{
-		Addr:         ":" + cfg.Port,
+		Addr:         ":" + appCfg.Port,
 		Handler:      mux,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
 	}
 
 	// Start server
 	go func() {
-		log.Info("starting server", "port", cfg.Port)
+		log.Info("starting server", "port", appCfg.Port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Error("server error", "error", err)
 			os.Exit(1)
@@ -86,8 +86,10 @@ func main() {
 	// Graceful shutdown
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
+
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		log.Error("graceful shutdown failed", "error", err)
+		os.Exit(1)
 	} else {
 		log.Info("shutdown complete")
 	}
