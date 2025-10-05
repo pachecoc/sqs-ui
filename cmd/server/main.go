@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
@@ -15,9 +16,17 @@ import (
 	"github.com/pachecoc/sqs-ui/internal/handler"
 	"github.com/pachecoc/sqs-ui/internal/logging"
 	"github.com/pachecoc/sqs-ui/internal/service"
+	"github.com/pachecoc/sqs-ui/internal/version"
 )
 
 func main() {
+
+	// Simple manual flag detection (before any env or config load)
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
+		fmt.Printf("Version: %s\nCommit: %s\nBuilt: %s\n",
+			version.Version, version.Commit, version.BuildTime)
+		os.Exit(0)
+	}
 
 	// Context cancelled on SIGINT/SIGTERM
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -34,14 +43,15 @@ func main() {
 
 	// Load AWS default config
 	awsCfg, err := config.LoadDefaultConfig(ctx)
-
 	if err != nil {
-		log.Error("failed to load AWS config", "error", err)
-		os.Exit(1)
+		log.Warn("could not load AWS config, running without SQS", "error", err)
 	}
 
-	// Construct SQS client
-	sqsClient := sqs.NewFromConfig(awsCfg)
+	// Create SQS client (only if config succeeded)
+	var sqsClient *sqs.Client
+	if err == nil {
+		sqsClient = sqs.NewFromConfig(awsCfg)
+	}
 
 	// Service with configured timeouts and receive behavior
 	svc := service.NewSQSService(
@@ -70,7 +80,7 @@ func main() {
 		WriteTimeout: 10 * time.Second,
 	}
 
-	// Start server
+	// Start server immediately, regardless of AWS status
 	go func() {
 		log.Info("starting server", "port", appCfg.Port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {

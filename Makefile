@@ -9,6 +9,13 @@ PLATFORMS ?= linux/amd64,linux/arm64
 BUILDER ?= multiarch-builder
 IMAGE_TAGGED := $(IMAGE_NAME):$(TAG)
 
+# --- Commit details
+GIT_COMMIT := $(shell git rev-parse --short HEAD)
+BUILD_DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+LDFLAGS := -X github.com/$(DOCKER_USER)/sqs-ui/internal/version.Version=$(TAG) \
+           -X github.com/$(DOCKER_USER)/sqs-ui/internal/version.Commit=$(GIT_COMMIT) \
+           -X github.com/$(DOCKER_USER)/sqs-ui/internal/version.BuildTime=$(BUILD_DATE)
+
 # --- Default ---
 all: tidy build
 
@@ -25,13 +32,13 @@ tidy:
 	@echo "📦 Tidying Go modules..."
 	go mod tidy
 
-verify:
-	@echo "🔍 Verifying module dependencies..."
-	go mod verify
-
 build-local:
-	@echo "🔨 Building local binary..."
-	CGO_ENABLED=0 go build -o bin/sqs-ui ./cmd/server
+	@echo "🔨 Building local binary with version metadata..."
+	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o bin/sqs-ui ./cmd/server
+
+version-check: build-local
+	@echo "🔍 Checking binary version..."
+	./bin/sqs-ui --version
 
 run-local:
 	@echo "🏃 Running sqs-ui locally..."
@@ -55,6 +62,9 @@ build: builder
 	@echo "🚀 Building and pushing multi-arch image to Docker Hub..."
 	docker buildx build \
 		--platform $(PLATFORMS) \
+		--build-arg VERSION=$(TAG) \
+		--build-arg COMMIT=$(GIT_COMMIT) \
+		--build-arg BUILD_TIME=$(BUILD_DATE) \
 		-t $(IMAGE_TAGGED) \
 		--push .
 	@echo "✅ Multi-arch image pushed: $(IMAGE_TAGGED)"
@@ -63,14 +73,37 @@ build: builder
 push: build
 	@echo "✅ Multi-arch image successfully pushed: $(IMAGE_TAGGED)"
 
-# Publish both latest and versioned tags
 release:
-	@if [ "$(TAG)" = "latest" ]; then echo "❌ You must specify TAG (e.g., make release TAG=0.1.0)"; exit 1; fi
+	@if [ "$(TAG)" = "latest" ]; then \
+		echo "❌ You must specify TAG (e.g., make release TAG=0.3.0)"; exit 1; \
+	fi
 	@echo "🏷️  Releasing version $(TAG)..."
+
+	# --- Build & Push Docker image with version metadata ---
 	@$(MAKE) push TAG=$(TAG)
-	@echo "📤 Also tagging as latest..."
-	docker buildx imagetools create -t $(IMAGE_NAME):latest $(IMAGE_NAME):$(TAG)
-	@echo "✅ Published $(IMAGE_NAME):$(TAG) and latest"
+
+	# --- Tag 'latest' ---
+	@echo "📤 Tagging as latest on Docker Hub..."
+	@docker buildx imagetools create -t $(IMAGE_NAME):latest $(IMAGE_NAME):$(TAG)
+
+	# --- Git Tag ---
+	@echo "🔖 Creating/updating Git tag v$(TAG)..."
+	-git tag -d v$(TAG) 2>/dev/null || true
+	git tag -a v$(TAG) -m "Release v$(TAG)"
+	git push origin :refs/tags/v$(TAG) 2>/dev/null || true
+	git push origin v$(TAG)
+
+	# --- GitHub Release ---
+	@if command -v gh >/dev/null 2>&1; then \
+		echo "🚀 Creating or updating GitHub release v$(TAG)..."; \
+		gh release delete v$(TAG) --yes 2>/dev/null || true; \
+		gh release create v$(TAG) --title "Release v$(TAG)" \
+			--notes "Automated release for version v$(TAG)\nCommit: $(GIT_COMMIT)\nBuilt: $(BUILD_DATE)" || true; \
+	else \
+		echo "⚠️ GitHub CLI (gh) not installed — skipping GitHub release."; \
+	fi
+
+	@echo "✅ Published Docker + Git + GitHub release for v$(TAG)"
 
 # --------------------------------------
 # 🔍 Utility Commands

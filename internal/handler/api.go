@@ -3,9 +3,10 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"log/slog"
 
 	"github.com/pachecoc/sqs-ui/internal/service"
-	"log/slog"
+	"github.com/pachecoc/sqs-ui/internal/version"
 )
 
 // APIHandler provides HTTP endpoints for interacting with SQS.
@@ -94,9 +95,14 @@ func (h *APIHandler) handleInfo(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, info)
 }
 
-// handleHealth simple liveness probe.
+// handleHealth returns a simple liveness probe and version info.
 func (h *APIHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	writeJSON(w, http.StatusOK, map[string]string{
+		"status":     "ok",
+		"version":    version.Version,
+		"commit":     version.Commit,
+		"build_time": version.BuildTime,
+	})
 }
 
 // Helpers

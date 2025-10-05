@@ -108,7 +108,7 @@
       lastQueueInfo = info;
       const formatted = [
         `Queue Name:      ${info.queue_name}`,
-        `Queue URL:       ${info.queue_url}`,
+        `Queue URL:       ${info.queue_url ?? 'N/A'}`,
         `Total Messages:  ${info.number_of_messages ?? 'N/A'}`,
         `Status:          ${info.status}`
       ].join('\n');
@@ -216,7 +216,7 @@
 
         // Begin countdown for broader refresh (messages + info).
         await new Promise(resolve => setTimeout(resolve, 800));
-        let seconds = 5;
+        let seconds = 8;
         sendStatus.innerHTML += `<p id="countdownText" class="text-blue-600">Refreshing queue info and messages in ${seconds}s...</p>`;
         const countdownEl = document.getElementById('countdownText');
         const countdown = setInterval(() => {

@@ -29,6 +29,7 @@ type SQSService struct {
 }
 
 func NewSQSService(ctx context.Context, client *sqs.Client, queueName, queueURL string, log *slog.Logger) *SQSService {
+	log.Debug("creating SQS service", "queue_name", queueName, "queue_url", queueURL)
 
 	s := &SQSService{
 		Client:                   client,
@@ -37,38 +38,38 @@ func NewSQSService(ctx context.Context, client *sqs.Client, queueName, queueURL 
 		Log:                      log,
 	}
 
-	// 🧠 If AWS credentials or region are missing, skip SQS init
+	// If AWS credentials or region are missing, skip SQS init
 	if client == nil {
 		s.Log.Warn("AWS client not provided. Running without SQS connection.")
 		return s
 	}
 
-	// 📨 Try to resolve the queue URL (only if name given)
+	// Try to resolve the queue URL (only if name given)
 	if queueURL == "" {
 
 		resp, err := client.GetQueueUrl(ctx, &sqs.GetQueueUrlInput{QueueName: &queueName})
-
 		if err != nil {
-			log.Error("failed to resolve queue URL", "queueName", queueName, "err", err)
-			s.Log.Warn("AWS client not provided. Running without SQS connection.")
+			s.Log.Warn("unable to resolve SQS queue URL", "queue_name", queueName, "error", err)
 			return s
 		}
 
 		queueURL = *resp.QueueUrl
+		s.Log.Info("resolved queue URL", "queue_name", queueName, "queue_url", s.QueueURL)
+
 	}
 
-	// Double-check we have a URL now
-	log.Info("resolved queue URL", "queueURL", queueURL)
-
-	return &SQSService{Client: client, QueueName: queueName, QueueURL: queueURL, Log: log}
+	return s
 }
 
 // Send publishes a message to the queue (adds group id if FIFO).
 func (s *SQSService) Send(ctx context.Context, msg string) error {
-	s.Log.Info("sending message", "msg", msg)
+	s.Log.Debug("sending message", "msg", msg)
 
-	if s.QueueURL == "" || msg == "" {
-		return fmt.Errorf("queue URL not set or empty message body")
+	if s.QueueURL == "" {
+		return fmt.Errorf("queue URL not set")
+	}
+	if msg == "" {
+		return fmt.Errorf("empty message body")
 	}
 
 	// Set a timeout for each operation
@@ -82,7 +83,6 @@ func (s *SQSService) Send(ctx context.Context, msg string) error {
 
 	// Using a default for now
 	if isFIFO(s.QueueURL) {
-		// groupID := s.DefaultGroupID
 		groupID := "default-group"
 		input.MessageGroupId = &groupID
 	}
@@ -99,14 +99,13 @@ func (s *SQSService) Send(ctx context.Context, msg string) error {
 // ReceiveAll behaves in loop mode regardless,
 // aggregating batches until an empty batch, iteration cap, or timeout occurs.
 func (s *SQSService) ReceiveAll(ctx context.Context, max int32) ([]map[string]interface{}, error) {
+	s.Log.Debug("receiving messages", "max", max)
 
 	if s.QueueURL == "" {
 		return nil, fmt.Errorf("queue URL not set")
 	}
 
-	timeout := 10 * time.Second
-
-	ctx, cancel := context.WithTimeout(ctx, timeout)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	start := time.Now()
@@ -120,7 +119,6 @@ func (s *SQSService) ReceiveAll(ctx context.Context, max int32) ([]map[string]in
 		}
 
 		resp, err := s.Client.ReceiveMessage(rc, input)
-
 		if err != nil {
 			return 0, err
 		}
@@ -136,7 +134,6 @@ func (s *SQSService) ReceiveAll(ctx context.Context, max int32) ([]map[string]in
 	}
 
 	const maxIterations = 25
-
 	for iteration := 1; iteration <= maxIterations; iteration++ {
 		select {
 		case <-ctx.Done():
@@ -149,7 +146,6 @@ func (s *SQSService) ReceiveAll(ctx context.Context, max int32) ([]map[string]in
 		}
 
 		n, err := doReceive(ctx)
-
 		if err != nil {
 			if (errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)) && len(allMsgs) > 0 {
 				s.Log.Warn("receiveAll timeout after partial retrieval", "count", len(allMsgs))
@@ -184,6 +180,8 @@ END:
 
 // Purge deletes all messages currently in the queue.
 func (s *SQSService) Purge(ctx context.Context) error {
+	s.Log.Debug("purging queue", "queue", s.QueueName)
+
 	if s.QueueURL == "" {
 		return fmt.Errorf("queue URL not set")
 	}
@@ -201,6 +199,8 @@ func (s *SQSService) Purge(ctx context.Context) error {
 
 // Info returns summary attributes for the queue (approximate counts).
 func (s *SQSService) Info(ctx context.Context) map[string]interface{} {
+	s.Log.Debug("fetching queue info", "queue_name", s.QueueName)
+
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
@@ -208,6 +208,11 @@ func (s *SQSService) Info(ctx context.Context) map[string]interface{} {
 		"queue_name": s.QueueName,
 		"queue_url":  s.QueueURL,
 		"status":     "ok",
+	}
+
+	if s.Client == nil || s.QueueURL == "" {
+		info["status"] = "not_connected"
+		return info
 	}
 
 	out, err := s.Client.GetQueueAttributes(ctx, &sqs.GetQueueAttributesInput{
@@ -244,5 +249,6 @@ func (s *SQSService) Info(ctx context.Context) map[string]interface{} {
 
 // isFIFO returns true if queue name contains fifo
 func isFIFO(name string) bool {
+	slog.Debug("checking if FIFO", "queue_name", name)
 	return strings.Contains(name, "fifo")
 }
