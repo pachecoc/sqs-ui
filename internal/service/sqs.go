@@ -136,10 +136,10 @@ func (s *SQSService) Send(ctx context.Context, msg string) error {
 // Fetch retrieves messages in batches until empty batch, iteration cap, or timeout.
 // max is currently unused (placeholder for future limit); retained for API stability.
 func (s *SQSService) Fetch(ctx context.Context, max int32) ([]map[string]interface{}, error) {
-	s.Log.Debug("receiving messages", "max", max)
+	s.Log.Debug("fetching messages", "max", max)
 
 	if s.QueueURL == "" {
-		s.Log.Info("receive skipped — no active queue configured")
+		s.Log.Info("fetch skipped — no active queue configured")
 		return nil, fmt.Errorf("no active queue configured, try to fetch queue info first")
 	}
 	if s.Client == nil {
@@ -178,23 +178,23 @@ func (s *SQSService) Fetch(ctx context.Context, max int32) ([]map[string]interfa
 		select {
 		case <-ctx.Done():
 			if len(allMsgs) > 0 {
-				s.Log.Warn("receive cancelled after partial retrieval", "count", len(allMsgs))
+				s.Log.Warn("fetch cancelled after partial retrieval", "count", len(allMsgs))
 				goto END
 			}
-			return nil, fmt.Errorf("receive operation timed out: %w", ctx.Err())
+			return nil, fmt.Errorf("fetch operation timed out: %w", ctx.Err())
 		default:
 		}
 
 		n, err := doReceive(ctx)
 		if err != nil {
 			if (errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)) && len(allMsgs) > 0 {
-				s.Log.Warn("receive timeout after partial retrieval", "count", len(allMsgs))
+				s.Log.Warn("fetch timeout after partial retrieval", "count", len(allMsgs))
 				break
 			}
 			if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-				return nil, fmt.Errorf("receive operation timed out: %w", err)
+				return nil, fmt.Errorf("fetch operation timed out: %w", err)
 			}
-			return nil, fmt.Errorf("failed to receive messages: %w", err)
+			return nil, fmt.Errorf("failed to fetch messages: %w", err)
 		}
 
 		if n == 0 {
@@ -202,18 +202,18 @@ func (s *SQSService) Fetch(ctx context.Context, max int32) ([]map[string]interfa
 		}
 
 		if s.Log.Enabled(ctx, slog.LevelDebug) {
-			s.Log.Debug("receive batch", "batch_count", n, "total", len(allMsgs), "iteration", iteration)
+			s.Log.Debug("fetch batch", "batch_count", n, "total", len(allMsgs), "iteration", iteration)
 		}
 
 		if iteration == maxReceiveIters {
-			s.Log.Warn("receive iteration cap reached", "cap", maxReceiveIters, "count", len(allMsgs))
+			s.Log.Warn("fetch iteration cap reached", "cap", maxReceiveIters, "count", len(allMsgs))
 		}
 	}
 
-END:
-	elapsed := time.Since(start)
-	s.Log.Info("messages fetched", "count", len(allMsgs), "elapsed_ms", elapsed.Milliseconds())
-	return allMsgs, nil
+	END:
+		elapsed := time.Since(start)
+		s.Log.Info("messages fetched", "count", len(allMsgs), "elapsed_ms", elapsed.Milliseconds())
+		return allMsgs, nil
 }
 
 // Purge deletes all messages currently in the queue.

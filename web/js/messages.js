@@ -3,12 +3,16 @@
 // Countdown timer for refresh
 let sendTimer = null;
 
+// Local pending flags (replacing centralized state)
+let pendingFetchMessages = false;
+let pendingSendMessage = false;
+
 // Fetch messages
 window.fetchMessages = async function fetchMessages() {
-  if (window.state && window.state.pending.fetchMessages) return;
+  if (pendingFetchMessages) return;
   const msgOut = document.getElementById('msgOut');
   if (!msgOut) return;
-  if (window.state) window.state.pending.fetchMessages = true;
+  pendingFetchMessages = true;
   msgOut.textContent = 'Fetching messages...';
   try {
     const data = await api('/api/messages');
@@ -16,13 +20,13 @@ window.fetchMessages = async function fetchMessages() {
   } catch (err) {
     renderError(msgOut, 'Failed to fetch messages:', err.message, 'Check queue settings and credentials provided.');
   } finally {
-    if (window.state) window.state.pending.fetchMessages = false;
+    pendingFetchMessages = false;
   }
 };
 
 // Send a message
 window.sendMessage = async function sendMessage() {
-  if (window.state && window.state.pending.sendMessage) return;
+  if (pendingSendMessage) return;
   const msgBox = document.getElementById('msgInput');
   const sendStatus = document.getElementById('sendStatus');
   if (!msgBox || !sendStatus) return;
@@ -34,7 +38,7 @@ window.sendMessage = async function sendMessage() {
     return;
   }
 
-  if (window.state) window.state.pending.sendMessage = true;
+  pendingSendMessage = true;
   sendStatus.textContent = '';
   const statusP = document.createElement('p');
   statusP.className = 'text-gray-500 italic';
@@ -70,16 +74,36 @@ window.sendMessage = async function sendMessage() {
         clearInterval(sendTimer);
         sendTimer = null;
         countdownEl.textContent = 'Refreshing now...';
-        refreshInfoAndMessages().finally(() => {
-          countdownEl.textContent = 'Queue refreshed successfully.';
-          setTimeout(() => countdownEl.remove(), 1500);
-        });
+
+        refreshInfoAndMessages()
+          .then(() => {
+            // Remove countdown line
+            countdownEl.remove();
+
+            // Replace entire status content with persistent advisory
+            sendStatus.innerHTML = '';
+
+            // Advisory about eventual consistency
+            const advisory = document.createElement('p');
+            advisory.className = 'text-xs text-amber-600 mt-1 leading-snug';
+            advisory.textContent = 'Refreshed. Provider metrics may lag; re-fetch/re-info if counts look inconsistent.';
+            sendStatus.appendChild(advisory);
+
+            // Auto-remove advisory after 10s (adjust or remove this if you want it persistent)
+            setTimeout(() => {
+              if (advisory.isConnected) advisory.remove();
+            }, 10000);
+          })
+          .catch(err => {
+            countdownEl.textContent = `Refresh failed: ${err.message}`;
+            countdownEl.className = 'text-red-600 text-sm mt-1';
+          });
       }
     }, 1000);
   } catch (err) {
     sendStatus.innerHTML = `<p class="text-red-600 font-semibold">Error sending message: ${err.message}</p>`;
   } finally {
-    if (window.state) window.state.pending.sendMessage = false;
+    pendingSendMessage = false;
   }
 };
 

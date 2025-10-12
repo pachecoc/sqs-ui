@@ -31,25 +31,16 @@ window.renderMessages = function renderMessages(data) {
     return;
   }
 
-  const blocks = data.map((msg, idx) => {
-    let json;
-    try {
-      json = JSON.stringify(msg, null, 2);
-    } catch {
-      json = String(msg);
-    }
-    return `
-      <div class="mb-3 border border-gray-700/60 rounded bg-gray-900/60 p-2">
-        <div class="text-xs text-gray-400 mb-1">#${idx + 1}</div>
-        <pre class="whitespace-pre-wrap break-words text-xs leading-snug">${escapeHTML(json)}</pre>
-      </div>`;
-  }).join('');
+  let json;
+  try {
+    json = JSON.stringify(data, null, 2);
+  } catch {
+    json = String(data);
+  }
 
-  msgOut.innerHTML = `
-    <p class="text-gray-600 mb-2">
-      Fetched ${data.length} message${data.length > 1 ? 's' : ''}:
-    </p>
-    <div>${blocks}</div>`;
+  msgOut.innerHTML =
+    `<p class="text-gray-600 mb-2 text-left">Fetched ${data.length} message${data.length > 1 ? 's' : ''}</p>` +
+    `<pre class="bg-gray-800 text-gray-200 rounded p-3 text-left overflow-auto whitespace-pre-wrap break-words text-sm leading-snug">${escapeHTML(json)}</pre>`;
 };
 
 // Clear message UI

@@ -1,16 +1,20 @@
 'use strict';
 
+// Local simple state replacements
+let lastQueueInfo = null;
+let pendingFetchInfo = false;
+
 // Fetch queue info
 window.fetchInfo = async function fetchInfo() {
-    if (window.state && window.state.pending.fetchInfo) return;
+    if (pendingFetchInfo) return;
     const infoOut = document.getElementById('infoOut');
     const msgOut = document.getElementById('msgOut');
 
     if (infoOut) infoOut.innerHTML = '<p>Fetching queue info...</p>';
-    if (window.state) window.state.pending.fetchInfo = true;
+    pendingFetchInfo = true;
     try {
         const info = await api('/info');
-        if (window.state) window.state.lastQueueInfo = info || null;
+        lastQueueInfo = info || null;
 
         if (info) {
             window.renderQueueInfo(info);
@@ -30,13 +34,13 @@ window.fetchInfo = async function fetchInfo() {
         if (msgOut) window.renderError(msgOut, title, msg, 'Check queue settings and credentials provided.');
         return null;
     } finally {
-        if (window.state) window.state.pending.fetchInfo = false;
+        pendingFetchInfo = false;
     }
 };
 
 // Refresh info and messages
 window.refreshInfoAndMessages = async function refreshInfoAndMessages() {
-    await Promise.all([fetchInfo(), fetchMessages()]);
+    await Promise.allSettled([fetchInfo(), fetchMessages()]);
 };
 
 // Build app skeleton
