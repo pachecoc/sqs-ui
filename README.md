@@ -135,18 +135,19 @@ docker run --rm -p 8080:8080 \
 
 ## 🧭 (Future Work / Suggestions)
 
-| Item                                 | Rationale                                           |
-| ------------------------------------ | --------------------------------------------------- |
-| Batch send / multi-message support   | Faster load testing.                                |
-| DLQ (Dead-letter queue) insight      | Operational debugging.                              |
-| Visibility timeout override in UI    | Testing redelivery behavior.                        |
-| Dark mode toggle                     | UX preference.                                      |
-| Enhanced SQS integration             | Broader compatibility and feature coverage.         |
-| Implementation of tests              | Ensures reliability and prevents regressions.       |
-| GitHub Actions for CI/CD             | Automate builds and tests.                          |
-| Improve Makefile with test use cases | Streamlines local development and CI.               |
-| Add security measures                | Protect sensitive data and prevent vulnerabilities. |
-| Use frontend frameworks              | Enhance UI scalability and maintainability.         |
+| Item                                  | Rationale                                           |
+| ------------------------------------  | --------------------------------------------------- |
+| Add option to provide AWS credentials | Enables quicker setup and faster load testing.       |                       |
+| Batch send / multi-message support    | Faster load testing.                                |
+| DLQ (Dead-letter queue) insight       | Operational debugging.                              |
+| Visibility timeout override in UI     | Testing redelivery behavior.                        |
+| Dark mode toggle                      | UX preference.                                      |
+| Enhanced SQS integration              | Broader compatibility and feature coverage.         |
+| Implementation of tests               | Ensures reliability and prevents regressions.       |
+| GitHub Actions for CI/CD              | Automate builds and tests.                          |
+| Improve Makefile with test use cases  | Streamlines local development and CI.               |
+| Add security measures                 | Protect sensitive data and prevent vulnerabilities. |
+| Use frontend frameworks               | Enhance UI scalability and maintainability.         |
 
 ---
 
