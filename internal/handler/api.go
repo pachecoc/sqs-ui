@@ -255,7 +255,7 @@ func respondJSON(w http.ResponseWriter, status int, v any) {
 
 func respondError(w http.ResponseWriter, status int, err error) {
 	payload := map[string]string{
-		"error":  http.StatusText(status),
+		"error": http.StatusText(status),
 	}
 	if err != nil {
 		payload["detail"] = err.Error()

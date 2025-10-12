@@ -15,7 +15,12 @@ BUILD_DATE ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 # Build & Run Targets
 # ------------------------------------------
 
-build-local:
+# Keep module files clean before building.
+tidy:
+	@echo "Running go mod tidy..."
+	go mod tidy
+
+build-local: tidy
 	@echo "Building sqs-ui locally..."
 	go build -v -o sqs-ui ./cmd/server
 
