@@ -73,7 +73,7 @@ release:
 	-git tag -d $(TAG) 2>/dev/null || true
 	git tag -a $(TAG) -m "Release $(TAG)"
 	git push origin :refs/tags/$(TAG) 2>/dev/null || true
-	git push origin $(TAG)
+	git push origin refs/tags/$(TAG)
 	@if command -v gh > /dev/null 2>&1; then \
 		echo "Creating or updating GitHub release $(TAG)..."; \
 		gh release delete $(TAG) --yes 2>/dev/null || true; \

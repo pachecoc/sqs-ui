@@ -1,8 +1,6 @@
-# SQS UI (v0.2.0)
+# SQS UI
 
 A lightweight web UI + Go backend to inspect and interact with **AWS SQS** queues.
-
-Version 0.2.0 refines the UI, adds a runtime “Change Queue” dialog, improved feedback around SQS eventual consistency, a smaller distroless container image, and embedded build metadata.
 
 ---
 
