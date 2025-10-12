@@ -1,104 +1,149 @@
-# ==========================================================
-# Makefile for SQS-UI
-# ==========================================================
-# This Makefile provides build, run, clean, and release targets.
-# Comments added for clarity and readability.
+# --------------------------------------
+# 🧱 SQS-UI  |  Local Multi-Arch Build (No Login Needed)
+# --------------------------------------
 
-# Variables
-BUILDER ?= sqs-ui-builder
-IMAGE_NAME ?= pachecoc/sqs-ui
-TAG ?= $(shell git describe --tags --always)
-GIT_COMMIT ?= $(shell git rev-parse HEAD)
-BUILD_DATE ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+DOCKER_USER ?= pachecoc
+IMAGE_NAME ?= $(DOCKER_USER)/sqs-ui
+TAG ?= latest
+PLATFORMS ?= linux/amd64,linux/arm64
+BUILDER ?= multiarch-builder
+IMAGE_TAGGED := $(IMAGE_NAME):$(TAG)
 
-# ------------------------------------------
-# Build & Run Targets
-# ------------------------------------------
+# --- Commit details
+GIT_COMMIT := $(shell git rev-parse --short HEAD)
+BUILD_DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+LDFLAGS := -X github.com/$(DOCKER_USER)/sqs-ui/internal/version.Version=$(TAG) \
+           -X github.com/$(DOCKER_USER)/sqs-ui/internal/version.Commit=$(GIT_COMMIT) \
+           -X github.com/$(DOCKER_USER)/sqs-ui/internal/version.BuildTime=$(BUILD_DATE)
 
-# Keep module files clean before building.
-tidy:
-	@echo "Running go mod tidy..."
+# --- Default ---
+all: tidy build
+
+# --------------------------------------
+# ⚙️ Go Development
+# --------------------------------------
+init:
+	@echo "🚀 Reinitializing Go module..."
+	rm -f go.mod go.sum
+	go mod init github.com/$(DOCKER_USER)/sqs-ui
 	go mod tidy
 
-build-local: tidy
-	@echo "Building sqs-ui locally..."
-	go build -v -o sqs-ui ./cmd/server
+tidy:
+	@echo "📦 Tidying Go modules..."
+	go mod tidy
+
+build-local:
+	@echo "🔨 Building local binary with version metadata..."
+	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o bin/sqs-ui ./cmd/server
+
+version-check: build-local
+	@echo "🔍 Checking binary version..."
+	./bin/sqs-ui --version
 
 run-local:
-	@echo "Running sqs-ui locally..."
-	go run ./cmd/server
+	@echo "🏃 Running sqs-ui locally..."
+	QUEUE_NAME=example go run ./cmd/server
 
-dev:
-	@echo "Running sqs-ui with live reload (Air)..."
-	@if ! command -v air > /dev/null 2>&1; then \
-		echo "Air is not installed. Run: go install github.com/air-verse/air@latest"; \
-		exit 1; \
-	fi
-	@export $$(grep -v '^#' .env | xargs) && air
-
-run-docker:
-	@echo "Running sqs-ui in Docker..."
-	docker run --rm -p 8080:8080 -e AWS_REGION -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e SQS_QUEUE_URL $(IMAGE_NAME):latest
-
-# ------------------------------------------
-# Clean Targets
-# ------------------------------------------
 clean-go:
-	@echo "Cleaning Go artifacts..."
-	rm -rf sqs-ui *.test *.out *.coverprofile coverage.* profile.cov bin/ build/ dist/ tmp/
+	@echo "🧹 Cleaning Go artifacts..."
+	rm -rf bin/ go.sum
 
-# ------------------------------------------
-# Docker Build Targets
-# ------------------------------------------
+# --------------------------------------
+# 🐳 Docker Build & Push (Multi-Arch Default)
+# --------------------------------------
 
 builder:
-	@echo "Ensuring buildx builder exists..."
-	@if ! docker buildx inspect $(BUILDER) > /dev/null 2>&1; then \
-		docker buildx create --name $(BUILDER) --use; \
-	fi
+	@echo "🧱 Ensuring buildx builder exists..."
+	-docker buildx create --name $(BUILDER) --use
 	docker buildx inspect --bootstrap
 
 # Build & push multi-arch image directly (no login)
-buildx:
-	make builder
-	docker buildx build --platform linux/amd64,linux/arm64 \
-		-t $(IMAGE_NAME):$(TAG) \
-		-t $(IMAGE_NAME):latest \
+build: builder
+	@echo "🚀 Building and pushing multi-arch image to Docker Hub..."
+	docker buildx build \
+		--platform $(PLATFORMS) \
+		--build-arg VERSION=$(TAG) \
+		--build-arg COMMIT=$(GIT_COMMIT) \
+		--build-arg BUILD_TIME=$(BUILD_DATE) \
+		-t $(IMAGE_TAGGED) \
 		--push .
+	@echo "✅ Multi-arch image pushed: $(IMAGE_TAGGED)"
 
-# ------------------------------------------
-# Release Targets
-# ------------------------------------------
+# Push target (alias for build)
+push: build
+	@echo "✅ Multi-arch image successfully pushed: $(IMAGE_TAGGED)"
 
 release:
-	make buildx
-	@docker buildx imagetools create -t $(IMAGE_NAME):latest $(IMAGE_NAME):$(TAG)
-	@echo "Creating/updating Git tag $(TAG)..."
-	-git tag -d $(TAG) 2>/dev/null || true
-	git tag -a $(TAG) -m "Release $(TAG)"
-	git push origin :refs/tags/$(TAG) 2>/dev/null || true
-	git push origin refs/tags/$(TAG)
-	@if command -v gh > /dev/null 2>&1; then \
-		echo "Creating or updating GitHub release $(TAG)..."; \
-		gh release delete $(TAG) --yes 2>/dev/null || true; \
-		gh release create $(TAG) --title "Release $(TAG)" \
-			--notes "$$(printf '%s\n%s\n\nDocker Image:\n```bash\ndocker pull %s:%s\ndocker run --rm %s:%s --version\n```\n\nMulti-arch: linux/amd64, linux/arm64' \
-			'Automated release for version $(TAG)' \
-			'Built Date: $(BUILD_DATE)' \
-			'$(IMAGE_NAME)' '$(TAG)' '$(IMAGE_NAME)' '$(TAG)')" || true; \
-	else \
-		echo "GitHub CLI (gh) not installed — skipping GitHub release."; \
+	@if [ "$(TAG)" = "latest" ]; then \
+		echo "❌ You must specify TAG (e.g., make release TAG=0.3.0)"; exit 1; \
 	fi
-	@echo "Published Docker + Git + GitHub release for $(TAG)"
+	@echo "🏷️  Releasing version $(TAG)..."
 
-# ------------------------------------------
-# Utility Commands
-# ------------------------------------------
+	# --- Build & Push Docker image with version metadata ---
+	@$(MAKE) push TAG=$(TAG)
 
-# Suggestion: Consider adding linting and testing targets for Go and frontend
-# lint:
-# 	golangci-lint run ./...
-# test:
-# 	go test ./...
+	# --- Tag 'latest' ---
+	@echo "📤 Tagging as latest on Docker Hub..."
+	@docker buildx imagetools create -t $(IMAGE_NAME):latest $(IMAGE_NAME):$(TAG)
 
-# End of Makefile
+	# --- Git Tag ---
+	@if git rev-parse "v$(TAG)" >/dev/null 2>&1; then \
+		read -p "⚠️ Git tag v$(TAG) already exists. Overwrite? [y/N]: " confirm; \
+		if [ "$$confirm" != "y" ] && [ "$$confirm" != "Y" ]; then \
+			echo "❌ Aborting new tag."; \
+		fi \
+		else \
+			@echo "🔖 Creating/updating Git tag v$(TAG)..."
+			git tag -d v$(TAG) 2>/dev/null || true
+			git tag -a v$(TAG) -m "Release v$(TAG)"
+			git push origin :refs/tags/v$(TAG) 2>/dev/null || true
+			git push origin v$(TAG)
+		fi
+	fi
+
+	# --- GitHub Release ---
+	@if command -v gh >/dev/null 2>&1; then \
+		if gh release view $(TAG) >/dev/null 2>&1; then \
+			read -p "⚠️ GitHub release $(TAG) already exists. Overwrite? [y/N]: " confirm; \
+			if [ "$$confirm" != "y" ] && [ "$$confirm" != "Y" ]; then \
+				echo "❌ Aborting release."; \
+			fi \
+			else \
+				@if command -v gh >/dev/null 2>&1; then \
+					echo "🚀 Creating or updating GitHub release v$(TAG)..."; \
+					gh release delete $(TAG) --yes 2>/dev/null; \
+					if [ -f CHANGELOG.md ]; then \
+						gh release create $(TAG) --title "Release $(TAG)" \
+							--notes-file CHANGELOG.md || true; \
+					else \
+						echo "⚠️ No CHANGELOG.md found. Release notes will be generic. Edit the release on GitHub to customize."; \
+						gh release create $(TAG) --title "Release $(TAG)" \
+							--notes "Automated release for version $(TAG)\nCommit: $(GIT_COMMIT)\nBuilt: $(BUILD_DATE)" || true; \
+					fi
+				fi
+			fi
+		fi
+	fi
+
+	@echo "✅ Published Docker + Git + GitHub release for $(TAG) (some steps may be skipped if required tools are missing)"
+
+# --------------------------------------
+# 🔍 Utility Commands
+# --------------------------------------
+
+check:
+	@echo "🔎 Docker info:"
+	@docker info --format '  Username: {{.RegistryConfig.IndexConfigs."docker.io".Name}}' || echo "  Not logged in"
+	@echo
+	@echo "🧩 Architectures available for $(IMAGE_NAME):"
+	@docker buildx imagetools inspect $(IMAGE_NAME):$(TAG) --format '{{json .Manifest.Manifests}}' 2>/dev/null | jq '.[].platform' || echo "  No manifest found."
+
+# --------------------------------------
+# 🧹 Cleanup
+# --------------------------------------
+clean:
+	@echo "🧹 Cleaning local Docker images and Go artifacts..."
+	-docker rmi $(IMAGE_TAGGED) $(IMAGE_NAME):latest 2>/dev/null || true
+	@$(MAKE) clean-go
+
+.PHONY: all init tidy verify build-local run-local clean-go builder build push release check clean
