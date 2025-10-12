@@ -1,12 +1,16 @@
 'use strict';
 
+// Fetch queue info
 window.fetchInfo = async function fetchInfo() {
+    if (window.state && window.state.pending.fetchInfo) return;
     const infoOut = document.getElementById('infoOut');
     const msgOut = document.getElementById('msgOut');
 
     if (infoOut) infoOut.innerHTML = '<p>Fetching queue info...</p>';
+    if (window.state) window.state.pending.fetchInfo = true;
     try {
         const info = await api('/info');
+        if (window.state) window.state.lastQueueInfo = info || null;
 
         if (info) {
             window.renderQueueInfo(info);
@@ -25,19 +29,17 @@ window.fetchInfo = async function fetchInfo() {
         const msg = err && err.message ? err.message : String(err);
         if (msgOut) window.renderError(msgOut, title, msg, 'Check queue settings and credentials provided.');
         return null;
+    } finally {
+        if (window.state) window.state.pending.fetchInfo = false;
     }
 };
 
+// Refresh info and messages
 window.refreshInfoAndMessages = async function refreshInfoAndMessages() {
-    const [info, msgs] = await Promise.allSettled([api('/info'), api('/api/messages')]);
-    if (info.status === 'fulfilled') renderQueueInfo(info.value);
-    else renderError(document.getElementById('infoOut'), 'Queue Info Error:', info.reason.message, 'Verify configuration.');
-
-    if (msgs.status === 'fulfilled') renderMessages(msgs.value);
-    else renderError(document.getElementById('msgOut'), 'Message Fetch Error:', msgs.reason.message, 'The queue may not exist or timed out.');
+    await Promise.all([fetchInfo(), fetchMessages()]);
 };
 
-// Create static HTML layout (no inline onclick handlers)
+// Build app skeleton
 function renderAppSkeleton() {
     const root = document.getElementById('app-root');
     if (!root) return;
@@ -67,7 +69,6 @@ function renderAppSkeleton() {
       </button>
     </div>
 
-    <!-- Confirm Dialog -->
     <div id="confirmDialog" class="fixed inset-0 hidden items-center justify-center bg-black bg-opacity-50 z-50">
         <div class="bg-white rounded-lg shadow-lg p-5 w-[32rem] max-w-full text-left">
         <h3 class="text-lg font-semibold mb-2">Confirm</h3>
@@ -99,7 +100,6 @@ function renderAppSkeleton() {
       </button>
     </div>
 
-    <!-- Queue Config Modal -->
     <div id="queueDialog" class="fixed inset-0 hidden items-center justify-center bg-black bg-opacity-50 z-50">
       <div class="bg-white rounded-lg shadow-lg p-6 w-[40rem] max-w-full text-left">
         <h2 class="text-xl font-semibold mb-4">Change Queue</h2>
@@ -128,7 +128,7 @@ function renderAppSkeleton() {
   `;
 }
 
-// Attach event listeners after the DOM skeleton is injected.
+// Wire event handlers
 function wireEvents() {
     const byId = (id) => document.getElementById(id);
 
@@ -141,6 +141,7 @@ function wireEvents() {
     byId('queueApplyBtn')?.addEventListener('click', updateQueueConfig);
 }
 
+// Initialize app
 window.addEventListener('DOMContentLoaded', async () => {
     renderAppSkeleton();
     wireEvents();

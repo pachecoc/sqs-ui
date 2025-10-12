@@ -1,12 +1,16 @@
 'use strict';
 
+// Open queue config dialog
 window.openQueueDialog = function openQueueDialog() {
     const dlg = document.getElementById('queueDialog');
     if (!dlg) return;
     dlg.classList.remove('hidden');
     dlg.classList.add('flex');
+    const first = document.getElementById('queueNameInput');
+    if (first) first.focus();
 };
 
+// Close queue config dialog
 window.closeQueueDialog = function closeQueueDialog() {
     const dialog = document.getElementById('queueDialog');
     const nameInput = document.getElementById('queueNameInput');
@@ -25,6 +29,7 @@ window.closeQueueDialog = function closeQueueDialog() {
     }
 };
 
+// Update queue configuration
 window.updateQueueConfig = async function updateQueueConfig() {
     const nameInput = document.getElementById('queueNameInput');
     const urlInput = document.getElementById('queueUrlInput');
@@ -33,10 +38,7 @@ window.updateQueueConfig = async function updateQueueConfig() {
     const spinner = document.getElementById('queueSpinner');
     const text = document.getElementById('queueApplyText');
 
-    if (!nameInput || !urlInput || !statusEl || !btn || !spinner || !text) {
-        // Required elements missing; abort gracefully.
-        return;
-    }
+    if (!nameInput || !urlInput || !statusEl || !btn || !spinner || !text) return;
 
     const name = nameInput.value.trim();
     const url = urlInput.value.trim();
@@ -60,15 +62,9 @@ window.updateQueueConfig = async function updateQueueConfig() {
             body: JSON.stringify({ queue_name: name, queue_url: url })
         });
 
-        // Close dialog on success
         closeQueueDialog();
-
-        // Clear all message-related UI (fresh start for new queue)
         window.clearMessageUI({ clearAll: true });
-
-        // Refresh queue info (await to ensure UI reflects updated queue)
         await fetchInfo();
-
     } catch (err) {
         statusEl.textContent = `Failed to update queue: ${err.message}`;
         statusEl.className = 'text-sm text-red-600 mb-3';

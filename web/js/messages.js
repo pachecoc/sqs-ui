@@ -1,21 +1,28 @@
-// ...existing code...
 'use strict';
 
+// Countdown timer for refresh
 let sendTimer = null;
 
+// Fetch messages
 window.fetchMessages = async function fetchMessages() {
+  if (window.state && window.state.pending.fetchMessages) return;
   const msgOut = document.getElementById('msgOut');
   if (!msgOut) return;
+  if (window.state) window.state.pending.fetchMessages = true;
   msgOut.textContent = 'Fetching messages...';
   try {
     const data = await api('/api/messages');
     renderMessages(data);
   } catch (err) {
     renderError(msgOut, 'Failed to fetch messages:', err.message, 'Check queue settings and credentials provided.');
+  } finally {
+    if (window.state) window.state.pending.fetchMessages = false;
   }
 };
 
+// Send a message
 window.sendMessage = async function sendMessage() {
+  if (window.state && window.state.pending.sendMessage) return;
   const msgBox = document.getElementById('msgInput');
   const sendStatus = document.getElementById('sendStatus');
   if (!msgBox || !sendStatus) return;
@@ -27,7 +34,7 @@ window.sendMessage = async function sendMessage() {
     return;
   }
 
-  // prevent multiple clicks
+  if (window.state) window.state.pending.sendMessage = true;
   sendStatus.textContent = '';
   const statusP = document.createElement('p');
   statusP.className = 'text-gray-500 italic';
@@ -71,10 +78,12 @@ window.sendMessage = async function sendMessage() {
     }, 1000);
   } catch (err) {
     sendStatus.innerHTML = `<p class="text-red-600 font-semibold">Error sending message: ${err.message}</p>`;
+  } finally {
+    if (window.state) window.state.pending.sendMessage = false;
   }
 };
 
-// small modal-based confirm helper that returns a Promise<boolean>
+// Confirm dialog
 window.confirmDialog = function confirmDialog(message) {
   return new Promise((resolve) => {
     const dlg = document.getElementById('confirmDialog');
@@ -111,6 +120,7 @@ window.confirmDialog = function confirmDialog(message) {
   });
 };
 
+// Purge queue
 window.purgeQueue = async function purgeQueue() {
   const msgOut = document.getElementById('msgOut');
   if (!msgOut) return;
@@ -135,4 +145,3 @@ window.purgeQueue = async function purgeQueue() {
     renderError(msgOut, 'Failed to purge queue', err.message, 'Check queue settings and server logs.');
   }
 };
-// ...existing code...

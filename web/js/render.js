@@ -1,15 +1,6 @@
 'use strict';
 
-// Minimal HTML escape to avoid XSS when inserting dynamic content.
-function escapeHTML(str = '') {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
+// Render queue info into the designated output area.
 window.renderQueueInfo = function renderQueueInfo(info) {
   const infoOut = document.getElementById('infoOut');
   if (!info || !infoOut) return;
@@ -30,6 +21,7 @@ window.renderQueueInfo = function renderQueueInfo(info) {
   infoOut.innerHTML = `<pre class="bg-gray-800 text-gray-200 rounded p-2 text-left font-mono overflow-auto whitespace-pre leading-snug break-all">${escapeHTML(formatted)}</pre>`;
 };
 
+// Render messages list
 window.renderMessages = function renderMessages(data) {
   const msgOut = document.getElementById('msgOut');
   if (!msgOut) return;
@@ -39,7 +31,6 @@ window.renderMessages = function renderMessages(data) {
     return;
   }
 
-  // Each message object is stringified safely.
   const blocks = data.map((msg, idx) => {
     let json;
     try {
@@ -61,17 +52,7 @@ window.renderMessages = function renderMessages(data) {
     <div>${blocks}</div>`;
 };
 
-window.renderError = function renderError(target, title, msg, hint) {
-  if (!target) return;
-  target.innerHTML = `
-    <div class="bg-red-50 border border-red-100 rounded-md px-3 py-1 text-left">
-      <p class="text-red-600 font-semibold text-sm leading-tight m-0">${escapeHTML(title)}</p>
-      <p class="text-[12px] text-gray-700 leading-tight m-0">${escapeHTML(msg)}</p>
-      <p class="text-[11px] text-gray-500 italic leading-tight m-0">${escapeHTML(hint)}</p>
-    </div>`;
-};
-
-// Helper: clear fetched messages and send-message input/status
+// Clear message UI
 window.clearMessageUI = function clearMessageUI(opts = {}) {
   const { clearFetchMessage = false, clearSendMessage = false, clearAll = false } = opts;
 
@@ -95,4 +76,15 @@ window.clearMessageUI = function clearMessageUI(opts = {}) {
       msgInput.value = '';
     }
   }
+};
+
+// Render error panel
+window.renderError = function renderError(target, title, msg, hint) {
+  if (!target) return;
+  target.innerHTML = `
+    <div class="bg-red-50 border border-red-100 rounded-md px-3 py-1 text-left">
+      <p class="text-red-600 font-semibold text-sm leading-tight m-0">${escapeHTML(title)}</p>
+      <p class="text-[12px] text-gray-700 leading-tight m-0">${escapeHTML(msg)}</p>
+      <p class="text-[11px] text-gray-500 italic leading-tight m-0">${escapeHTML(hint)}</p>
+    </div>`;
 };
