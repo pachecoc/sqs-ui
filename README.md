@@ -137,7 +137,7 @@ docker run --rm -p 8080:8080 \
 
 | Item                                  | Rationale                                           |
 | ------------------------------------  | --------------------------------------------------- |
-| Add option to provide AWS credentials | Enables quicker setup and faster load testing.       |                       |
+| Add option to provide AWS credentials | Enables quicker setup and faster load testing.      |
 | Batch send / multi-message support    | Faster load testing.                                |
 | DLQ (Dead-letter queue) insight       | Operational debugging.                              |
 | Visibility timeout override in UI     | Testing redelivery behavior.                        |
