@@ -4,4 +4,6 @@ body {
 
 pre {
   font-size: 0.85rem;
+  line-height: 1.25rem;
+  /* improve readability for multi-line SQS message bodies */
 }

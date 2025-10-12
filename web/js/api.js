@@ -2,14 +2,31 @@
 
 window.api = async function api(path, options = {}) {
     const method = (options.method || 'GET').toUpperCase();
+    const headers = {
+        'Accept': 'application/json',
+        ...(options.headers || {})
+    };
     const res = await fetch(path, {
-        headers: { 'Accept': 'application/json', ...(options.headers || {}) },
-        ...options
+        ...options,
+        method,
+        headers
     });
-    const text = await res.text();
+
+    const raw = await res.text();
     let data;
-    try { data = JSON.parse(text); } catch { throw new Error(text); }
-    if (!res.ok) throw new Error(data.detail || data.error || text);
+    try {
+        data = raw ? JSON.parse(raw) : null;
+    } catch {
+        // If server returned non-JSON but status is not OK, surface raw text
+        if (!res.ok) throw new Error(raw);
+        // For OK responses with non-JSON, just return the raw text
+        return raw;
+    }
+
+    if (!res.ok) {
+        const msg = (data && (data.detail || data.error)) || raw || `HTTP ${res.status}`;
+        throw new Error(msg);
+    }
     return data;
 };
 

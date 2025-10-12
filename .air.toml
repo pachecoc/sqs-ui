@@ -12,7 +12,7 @@ tmp_dir = "tmp"
   bin = "tmp/sqs-ui"
 
   # File extensions to watch
-  include_ext = ["go", "html", "css", "js"]
+  include_ext = ["go", "html", "css", "js", "assets"]
 
   # Directories to ignore (no rebuilds triggered)
   exclude_dir = ["tmp", "bin", "dist", "vendor"]

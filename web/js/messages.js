@@ -3,8 +3,9 @@
 
 let sendTimer = null;
 
-window.fetchMsgs = async function fetchMsgs() {
+window.fetchMessages = async function fetchMessages() {
   const msgOut = document.getElementById('msgOut');
+  if (!msgOut) return;
   msgOut.textContent = 'Fetching messages...';
   try {
     const data = await api('/api/messages');
@@ -14,10 +15,12 @@ window.fetchMsgs = async function fetchMsgs() {
   }
 };
 
-window.sendMsg = async function sendMsg() {
+window.sendMessage = async function sendMessage() {
   const msgBox = document.getElementById('msgInput');
-  const msg = msgBox.value.trim();
   const sendStatus = document.getElementById('sendStatus');
+  if (!msgBox || !sendStatus) return;
+
+  const msg = msgBox.value.trim();
 
   if (!msg) {
     sendStatus.innerHTML = '<p class="text-red-600">Please enter a message before sending.</p>';
@@ -41,7 +44,6 @@ window.sendMsg = async function sendMsg() {
     msgBox.value = '';
     sendStatus.innerHTML = '<p class="text-green-600 font-semibold mb-1">Message sent successfully.</p>';
 
-    // clear any previous timer
     if (sendTimer) {
       clearInterval(sendTimer);
       sendTimer = null;
@@ -61,8 +63,7 @@ window.sendMsg = async function sendMsg() {
         clearInterval(sendTimer);
         sendTimer = null;
         countdownEl.textContent = 'Refreshing now...';
-        // refreshQueueState is expected to call /api/info and update UI
-        refreshQueueState().finally(() => {
+        refreshInfoAndMessages().finally(() => {
           countdownEl.textContent = 'Queue refreshed successfully.';
           setTimeout(() => countdownEl.remove(), 1500);
         });
@@ -74,7 +75,7 @@ window.sendMsg = async function sendMsg() {
 };
 
 // small modal-based confirm helper that returns a Promise<boolean>
-window.confirmModal = function confirmModal(message) {
+window.confirmDialog = function confirmDialog(message) {
   return new Promise((resolve) => {
     const dlg = document.getElementById('confirmDialog');
     const txt = document.getElementById('confirmDialogText');
@@ -82,7 +83,6 @@ window.confirmModal = function confirmModal(message) {
     const cancel = document.getElementById('confirmDialogCancel');
 
     if (!dlg || !ok || !cancel || !txt) {
-      // fallback to native confirm if modal is not present
       return resolve(window.confirm(message));
     }
 
@@ -104,7 +104,6 @@ window.confirmModal = function confirmModal(message) {
     ok.addEventListener('click', onOk);
     cancel.addEventListener('click', onCancel);
 
-    // optional: close on Escape
     const onKey = (e) => {
       if (e.key === 'Escape') { cleanup(false); }
     };
@@ -114,24 +113,22 @@ window.confirmModal = function confirmModal(message) {
 
 window.purgeQueue = async function purgeQueue() {
   const msgOut = document.getElementById('msgOut');
+  if (!msgOut) return;
 
-  const confirmed = await window.confirmModal('This will delete all messages from the queue. Continue?');
+  const confirmed = await window.confirmDialog('This will delete all messages from the queue. Continue?');
   if (!confirmed) return;
 
   try {
     msgOut.textContent = 'Purging queue...';
     await api('/api/purge', { method: 'POST' });
 
-    // keep success visible for a short moment so user notices it
     msgOut.innerHTML = `
       <p class="text-green-600 font-semibold mb-1">Queue purged.</p>
       <p class="text-gray-600">Refreshing…</p>`;
 
-    // small deliberate pause so the user sees the purged state
     await new Promise((res) => setTimeout(res, 2000));
 
-    // clear message panels and refresh info
-    window.clearMessageBoxes({ clearAll: true });
+    window.clearMessageUI({ clearAll: true });
     await fetchInfo();
 
   } catch (err) {

@@ -3,24 +3,20 @@
 window.fetchInfo = async function fetchInfo() {
     const infoOut = document.getElementById('infoOut');
     const msgOut = document.getElementById('msgOut');
-    const msgInput = document.getElementById('msgInput');
 
     if (infoOut) infoOut.innerHTML = '<p>Fetching queue info...</p>';
     try {
         const info = await api('/info');
 
-        // Always render queue info panel (even when not connected)
         if (info) {
             window.renderQueueInfo(info);
         }
 
-        // If backend reports not_connected, also surface error in Messages panel + send textarea
         if (info && info.status === 'not_connected') {
             const title = 'Queue not connected';
             const msg = info.error || info.message || 'The configured queue is not connected.';
             if (msgOut) window.renderError(msgOut, title, msg, 'Check queue settings and credentials provided.');
-
-            window.clearMessageBoxes({ clearSendMessage: true });
+            window.clearMessageUI({ clearSendMessage: true });
         }
 
         return info;
@@ -32,7 +28,7 @@ window.fetchInfo = async function fetchInfo() {
     }
 };
 
-window.refreshQueueState = async function refreshQueueState() {
+window.refreshInfoAndMessages = async function refreshInfoAndMessages() {
     const [info, msgs] = await Promise.allSettled([api('/info'), api('/api/messages')]);
     if (info.status === 'fulfilled') renderQueueInfo(info.value);
     else renderError(document.getElementById('infoOut'), 'Queue Info Error:', info.reason.message, 'Verify configuration.');
@@ -41,15 +37,16 @@ window.refreshQueueState = async function refreshQueueState() {
     else renderError(document.getElementById('msgOut'), 'Message Fetch Error:', msgs.reason.message, 'The queue may not exist or timed out.');
 };
 
-// Create static HTML layout
+// Create static HTML layout (no inline onclick handlers)
 function renderAppSkeleton() {
     const root = document.getElementById('app-root');
+    if (!root) return;
     root.innerHTML = `
     <div class="flex justify-center gap-3 mb-4">
-      <button onclick="openQueueDialog()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded shadow">
+      <button id="changeQueueBtn" type="button" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded shadow">
         Change Queue
       </button>
-      <button onclick="fetchInfo()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded shadow">
+      <button id="fetchInfoBtn" type="button" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded shadow">
         Fetch Queue Info
       </button>
     </div>
@@ -62,15 +59,15 @@ function renderAppSkeleton() {
     </div>
 
     <div class="flex flex-wrap justify-center gap-3 mb-6">
-      <button onclick="fetchMsgs()" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded shadow">
+      <button id="fetchMessagesBtn" type="button" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded shadow">
         Fetch Messages
       </button>
-      <button onclick="purgeQueue()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded shadow">
+      <button id="purgeQueueBtn" type="button" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded shadow">
         Purge Queue
       </button>
     </div>
 
-    <!-- Confirm Dialog (used by purge and other destructive actions) -->
+    <!-- Confirm Dialog -->
     <div id="confirmDialog" class="fixed inset-0 hidden items-center justify-center bg-black bg-opacity-50 z-50">
         <div class="bg-white rounded-lg shadow-lg p-5 w-[32rem] max-w-full text-left">
         <h3 class="text-lg font-semibold mb-2">Confirm</h3>
@@ -97,9 +94,9 @@ function renderAppSkeleton() {
     </div>
 
     <div class="flex justify-end">
-    <button onclick="sendMsg()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded shadow">
+      <button id="sendMessageBtn" type="button" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded shadow">
         Send Message
-    </button>
+      </button>
     </div>
 
     <!-- Queue Config Modal -->
@@ -114,8 +111,8 @@ function renderAppSkeleton() {
           class="w-full border border-gray-300 rounded-md p-2 mb-4 font-mono text-sm focus:ring-blue-500 focus:border-blue-500" />
         <div id="queueStatus" class="text-sm text-gray-600 mb-3 h-5"></div>
         <div class="flex justify-end gap-2">
-          <button onclick="closeQueueDialog()" class="px-3 py-1 rounded border border-gray-300 hover:bg-gray-100">Cancel</button>
-          <button id="queueApplyBtn" onclick="applyQueueChange()"
+          <button id="queueCancelBtn" type="button" class="px-3 py-1 rounded border border-gray-300 hover:bg-gray-100">Cancel</button>
+          <button id="queueApplyBtn" type="button"
             class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-1 rounded flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
             <span id="queueApplyText">Apply</span>
             <svg id="queueSpinner" class="hidden animate-spin h-4 w-4 text-white"
@@ -131,7 +128,21 @@ function renderAppSkeleton() {
   `;
 }
 
+// Attach event listeners after the DOM skeleton is injected.
+function wireEvents() {
+    const byId = (id) => document.getElementById(id);
+
+    byId('changeQueueBtn')?.addEventListener('click', openQueueDialog);
+    byId('fetchInfoBtn')?.addEventListener('click', fetchInfo);
+    byId('fetchMessagesBtn')?.addEventListener('click', fetchMessages);
+    byId('purgeQueueBtn')?.addEventListener('click', purgeQueue);
+    byId('sendMessageBtn')?.addEventListener('click', sendMessage);
+    byId('queueCancelBtn')?.addEventListener('click', closeQueueDialog);
+    byId('queueApplyBtn')?.addEventListener('click', updateQueueConfig);
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
     renderAppSkeleton();
+    wireEvents();
     await fetchInfo();
 });

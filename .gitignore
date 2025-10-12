@@ -30,7 +30,7 @@ vendor/
 bin/
 build/
 dist/
-tmp/               # Air live reload temp directory
+tmp/
 
 # ------------------------------------------
 # Logs & temporary files
