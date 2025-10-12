@@ -24,8 +24,6 @@ build-local: tidy
 	@echo "Building sqs-ui locally..."
 	go build -v -o sqs-ui ./cmd/server
 
-version-check: build-local
-
 run-local:
 	@echo "Running sqs-ui locally..."
 	go run ./cmd/server
