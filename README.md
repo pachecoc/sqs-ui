@@ -2,6 +2,8 @@
 
 A lightweight web UI + Go backend to inspect and interact with **AWS SQS** queues.
 
+> **Note:** This repository is under active development. It is not production ready.
+
 ---
 
 ## 0.2.0 Highlights (since 0.1.x)
