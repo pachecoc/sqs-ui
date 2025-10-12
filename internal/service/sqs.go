@@ -28,6 +28,14 @@ type SQSService struct {
 	Log                      *slog.Logger
 }
 
+const (
+    receiveTimeout    = 10 * time.Second
+    receiveWaitSecs   = int32(5)
+    receiveVisibility = int32(10)
+    maxReceiveIters   = 25
+    queueAttrTimeout  = 3 * time.Second
+)
+
 func NewSQSService(ctx context.Context, client *sqs.Client, queueName, queueURL, region string, log *slog.Logger) *SQSService {
 	log.Debug("creating SQS service", "queue_name", queueName, "queue_url", queueURL)
 
@@ -127,9 +135,9 @@ func (s *SQSService) Send(ctx context.Context, msg string) error {
 	return nil
 }
 
-// ReceiveAll behaves in loop mode regardless,
+// Fetch behaves in loop mode regardless,
 // aggregating batches until an empty batch, iteration cap, or timeout occurs.
-func (s *SQSService) ReceiveAll(ctx context.Context, max int32) ([]map[string]interface{}, error) {
+func (s *SQSService) Fetch(ctx context.Context, max int32) ([]map[string]interface{}, error) {
 	s.Log.Debug("receiving messages", "max", max)
 
 	if s.QueueURL == "" {
@@ -307,5 +315,5 @@ func (s *SQSService) Info(ctx context.Context) map[string]interface{} {
 // isFIFO returns true if queue name contains fifo
 func isFIFO(name string) bool {
 	slog.Debug("checking if FIFO", "queue_name", name)
-	return strings.Contains(name, "fifo")
+	return strings.HasSuffix(strings.ToLower(name), ".fifo")
 }

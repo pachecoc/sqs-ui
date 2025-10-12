@@ -50,9 +50,7 @@ func main() {
     // Ensure region is set (default to us-east-1 when not provided)
     if err == nil {
         if awsCfg.Region != "" {
-            _ = os.Setenv("AWS_REGION", awsCfg.Region)
             log.Info("AWS region detected", "region", awsCfg.Region)
-
         } else {
             log.Info("AWS region not set in credentials/config")
         }
