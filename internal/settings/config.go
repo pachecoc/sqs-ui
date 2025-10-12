@@ -17,21 +17,19 @@ type AppConfig struct {
 
 // Load reads environment variables, applying defaults and validation.
 func Load(log *slog.Logger) AppConfig {
+
+	// Read environment variables
 	queueName := os.Getenv("QUEUE_NAME")
 	queueURL := os.Getenv("QUEUE_URL")
 	port := os.Getenv("PORT")
+	logLevel := os.Getenv("LOG_LEVEL")
 
+	// Default port
 	if port == "" {
 		port = "8080"
 	}
 
-	if queueName == "" && queueURL == "" {
-		log.Error("missing QUEUE_NAME or QUEUE_URL environment variable")
-		os.Exit(1)
-	}
-
-	logLevel := os.Getenv("LOG_LEVEL")
-
+	// Default log level
 	if logLevel == "" {
 		logLevel = "info"
 	}

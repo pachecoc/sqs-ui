@@ -42,7 +42,15 @@ version-check: build-local
 
 run-local:
 	@echo "🏃 Running sqs-ui locally..."
-	QUEUE_NAME=example go run ./cmd/server
+	QUEUE_NAME=$(QUEUE_NAME) go run ./cmd/server
+
+dev:
+	@echo "🚀 Running sqs-ui with live reload (Air)..."
+	@if ! command -v air >/dev/null 2>&1; then \
+		echo "❌ Air is not installed. Run: go install github.com/air-verse/air@latest"; \
+		exit 1; \
+	fi
+	@export $$(grep -v '^#' .env | xargs) && air
 
 clean-go:
 	@echo "🧹 Cleaning Go artifacts..."

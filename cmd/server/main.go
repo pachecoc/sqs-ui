@@ -44,8 +44,19 @@ func main() {
 	// Load AWS default config
 	awsCfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
-		log.Warn("could not load AWS config, running without SQS", "error", err)
+		log.Warn("could not load AWS config", "error", err)
 	}
+
+    // Ensure region is set (default to us-east-1 when not provided)
+    if err == nil {
+        if awsCfg.Region != "" {
+            _ = os.Setenv("AWS_REGION", awsCfg.Region)
+            log.Info("AWS region detected", "region", awsCfg.Region)
+
+        } else {
+            log.Info("AWS region not set in credentials/config")
+        }
+    }
 
 	// Create SQS client (only if config succeeded)
 	var sqsClient *sqs.Client
@@ -53,31 +64,39 @@ func main() {
 		sqsClient = sqs.NewFromConfig(awsCfg)
 	}
 
-	// Service with configured timeouts and receive behavior
-	svc := service.NewSQSService(
-		ctx,
-		sqsClient,
-		appCfg.QueueName,
-		appCfg.QueueURL,
-		log,
-	)
+	// Initialize SQS service — handle empty config gracefully (idle mode).
+	var svc *service.SQSService
+	if appCfg.QueueName == "" && appCfg.QueueURL == "" {
+		log.Warn("no QUEUE_NAME or QUEUE_URL provided — running in idle mode")
+		svc = &service.SQSService{
+			Client:    sqsClient,
+			QueueName: "",
+			QueueURL:  "",
+			Region:    awsCfg.Region,
+			Log:       log,
+		}
+	} else {
+		// Function to create the SQS service and extract the queue name if URL given
+		svc = service.NewSQSService(ctx, sqsClient, appCfg.QueueName, appCfg.QueueURL, awsCfg.Region, log)
+	}
 
 	// Print appCfg object
 	// log.Info("configuration", "config", svc)
 	// os.Exit(0)
 
-	// HTTP API
+	// Register HTTP routes.
 	api := handler.NewAPIHandler(svc, log)
 	mux := http.NewServeMux()
 	api.RegisterRoutes(mux)
 	mux.Handle("/", http.FileServer(http.Dir("./web")))
 
-	// HTTP server with timeouts
+	// Configure HTTP server with sane defaults.
 	server := &http.Server{
 		Addr:         ":" + appCfg.Port,
 		Handler:      mux,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 
 	// Start server immediately, regardless of AWS status
@@ -100,7 +119,7 @@ func main() {
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		log.Error("graceful shutdown failed", "error", err)
 		os.Exit(1)
-	} else {
-		log.Info("shutdown complete")
 	}
+
+	log.Info("shutdown complete")
 }

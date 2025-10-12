@@ -1,0 +1,137 @@
+'use strict';
+
+window.fetchInfo = async function fetchInfo() {
+    const infoOut = document.getElementById('infoOut');
+    const msgOut = document.getElementById('msgOut');
+    const msgInput = document.getElementById('msgInput');
+
+    if (infoOut) infoOut.innerHTML = '<p>Fetching queue info...</p>';
+    try {
+        const info = await api('/info');
+
+        // Always render queue info panel (even when not connected)
+        if (info) {
+            window.renderQueueInfo(info);
+        }
+
+        // If backend reports not_connected, also surface error in Messages panel + send textarea
+        if (info && info.status === 'not_connected') {
+            const title = 'Queue not connected';
+            const msg = info.error || info.message || 'The configured queue is not connected.';
+            if (msgOut) window.renderError(msgOut, title, msg, 'Check queue settings and credentials provided.');
+
+            window.clearMessageBoxes({ clearSendMessage: true });
+        }
+
+        return info;
+    } catch (err) {
+        const title = 'Failed to fetch queue info';
+        const msg = err && err.message ? err.message : String(err);
+        if (msgOut) window.renderError(msgOut, title, msg, 'Check queue settings and credentials provided.');
+        return null;
+    }
+};
+
+window.refreshQueueState = async function refreshQueueState() {
+    const [info, msgs] = await Promise.allSettled([api('/info'), api('/api/messages')]);
+    if (info.status === 'fulfilled') renderQueueInfo(info.value);
+    else renderError(document.getElementById('infoOut'), 'Queue Info Error:', info.reason.message, 'Verify configuration.');
+
+    if (msgs.status === 'fulfilled') renderMessages(msgs.value);
+    else renderError(document.getElementById('msgOut'), 'Message Fetch Error:', msgs.reason.message, 'The queue may not exist or timed out.');
+};
+
+// Create static HTML layout
+function renderAppSkeleton() {
+    const root = document.getElementById('app-root');
+    root.innerHTML = `
+    <div class="flex justify-center gap-3 mb-4">
+      <button onclick="openQueueDialog()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded shadow">
+        Change Queue
+      </button>
+      <button onclick="fetchInfo()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded shadow">
+        Fetch Queue Info
+      </button>
+    </div>
+
+    <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-left text-sm font-mono mb-6">
+      <h2 class="text-lg font-semibold mb-2">Queue Info</h2>
+      <div id="infoOut" class="whitespace-pre-wrap break-words text-sm text-gray-700">
+        <p class="text-gray-400 italic">Click “Fetch Queue Info” to view queue details...</p>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap justify-center gap-3 mb-6">
+      <button onclick="fetchMsgs()" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded shadow">
+        Fetch Messages
+      </button>
+      <button onclick="purgeQueue()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded shadow">
+        Purge Queue
+      </button>
+    </div>
+
+    <!-- Confirm Dialog (used by purge and other destructive actions) -->
+    <div id="confirmDialog" class="fixed inset-0 hidden items-center justify-center bg-black bg-opacity-50 z-50">
+        <div class="bg-white rounded-lg shadow-lg p-5 w-[32rem] max-w-full text-left">
+        <h3 class="text-lg font-semibold mb-2">Confirm</h3>
+        <p id="confirmDialogText" class="text-sm text-gray-700 mb-4">Are you sure?</p>
+        <div class="flex justify-end gap-2">
+            <button id="confirmDialogCancel" type="button" class="px-3 py-1 rounded border border-gray-300 hover:bg-gray-100">Cancel</button>
+            <button id="confirmDialogOk" type="button" class="bg-red-500 hover:bg-red-600 text-white px-4 py-1 rounded">Yes</button>
+        </div>
+        </div>
+    </div>
+
+    <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-left text-sm font-mono h-96 overflow-auto mb-6">
+      <h2 class="text-lg font-semibold mb-2">Messages</h2>
+      <div id="msgOut" class="whitespace-pre-wrap break-words text-sm text-gray-700">
+        <p class="text-gray-400 italic">No messages fetched yet...</p>
+      </div>
+    </div>
+
+    <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-left text-sm font-mono mb-6">
+      <h2 class="text-lg font-semibold mb-2">Send a Message</h2>
+      <textarea id="msgInput" rows="4" class="w-full border border-gray-300 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 mb-2 resize-y font-mono text-sm bg-white text-gray-700"
+        placeholder="Type your message here..."></textarea>
+      <div id="sendStatus" class="text-sm mb-2 min-h-[1.5rem] text-gray-700">:)</div>
+    </div>
+
+    <div class="flex justify-end">
+    <button onclick="sendMsg()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded shadow">
+        Send Message
+    </button>
+    </div>
+
+    <!-- Queue Config Modal -->
+    <div id="queueDialog" class="fixed inset-0 hidden items-center justify-center bg-black bg-opacity-50 z-50">
+      <div class="bg-white rounded-lg shadow-lg p-6 w-[40rem] max-w-full text-left">
+        <h2 class="text-xl font-semibold mb-4">Change Queue</h2>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Queue Name (ignored if URL is set)</label>
+        <input id="queueNameInput" type="text" placeholder="example-queue"
+          class="w-full border border-gray-300 rounded-md p-2 mb-3 focus:ring-blue-500 focus:border-blue-500" />
+        <label class="block text-sm font-medium text-gray-700 mb-1">Queue URL (required only for cross-account/region queue)</label>
+        <input id="queueUrlInput" type="text" placeholder="https://sqs.us-east-1.amazonaws.com/123456789012/example-queue"
+          class="w-full border border-gray-300 rounded-md p-2 mb-4 font-mono text-sm focus:ring-blue-500 focus:border-blue-500" />
+        <div id="queueStatus" class="text-sm text-gray-600 mb-3 h-5"></div>
+        <div class="flex justify-end gap-2">
+          <button onclick="closeQueueDialog()" class="px-3 py-1 rounded border border-gray-300 hover:bg-gray-100">Cancel</button>
+          <button id="queueApplyBtn" onclick="applyQueueChange()"
+            class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-1 rounded flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
+            <span id="queueApplyText">Apply</span>
+            <svg id="queueSpinner" class="hidden animate-spin h-4 w-4 text-white"
+              xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor"
+                d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+window.addEventListener('DOMContentLoaded', async () => {
+    renderAppSkeleton();
+    await fetchInfo();
+});

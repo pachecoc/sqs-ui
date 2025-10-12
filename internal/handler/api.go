@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"log/slog"
+	"sync"
 
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/pachecoc/sqs-ui/internal/service"
 	"github.com/pachecoc/sqs-ui/internal/version"
 )
@@ -13,6 +16,7 @@ import (
 type APIHandler struct {
 	SQS *service.SQSService
 	Log *slog.Logger
+	mu  sync.Mutex // protects SQS for runtime replacement
 }
 
 // NewAPIHandler creates a new APIHandler.
@@ -20,13 +24,37 @@ func NewAPIHandler(sqs *service.SQSService, log *slog.Logger) *APIHandler {
 	return &APIHandler{SQS: sqs, Log: log}
 }
 
+// requireQueue is a small middleware that ensures a queue name or URL is configured.
+// If not configured, it returns a 400 JSON error and does not call the next handler.
+func (h *APIHandler) requireQueue(next http.HandlerFunc) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        h.mu.Lock()
+        svc := h.SQS
+        h.mu.Unlock()
+
+        if svc == nil {
+            writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "service unavailable"})
+            return
+        }
+        if err := svc.EnsureQueueConfigured(); err != nil {
+            writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+            return
+        }
+        next(w, r)
+    }
+}
+
 // RegisterRoutes wires all HTTP endpoints.
 func (h *APIHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/send", h.handleSend)
-	mux.HandleFunc("/api/messages", h.handleMessages)
-	mux.HandleFunc("/api/purge", h.handlePurge)
-	mux.HandleFunc("/info", h.handleInfo)
-	mux.HandleFunc("/healthz", h.handleHealth)
+    // Wrap queue-dependent endpoints with requireQueue middleware
+    mux.HandleFunc("/api/send", h.requireQueue(h.handleSend))
+    mux.HandleFunc("/api/messages", h.requireQueue(h.handleMessages))
+    mux.HandleFunc("/api/purge", h.requireQueue(h.handlePurge))
+
+    // endpoints that do not require a configured queue
+    mux.HandleFunc("/api/config/queue", h.handleChangeQueue)
+    mux.HandleFunc("/info", h.handleInfo)
+    mux.HandleFunc("/healthz", h.handleHealth)
 }
 
 // handleSend accepts a JSON body { "message": "<text>" } and forwards to SQS.
@@ -45,16 +73,20 @@ func (h *APIHandler) handleSend(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "message cannot be empty", http.StatusBadRequest)
 		return
 	}
-	if err := h.SQS.Send(r.Context(), req.Message); err != nil {
-		h.Log.Error("failed to send message", "err", err)
+
+	h.mu.Lock()
+	svc := h.SQS
+	h.mu.Unlock()
+
+	if err := svc.Send(r.Context(), req.Message); err != nil {
+		h.Log.Error("failed to send message", "error", err)
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	info := h.SQS.Info(r.Context())
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status":  "ok",
 		"message": "message sent successfully",
-		"info":    info,
 	})
 }
 
@@ -63,10 +95,14 @@ func (h *APIHandler) handleMessages(w http.ResponseWriter, r *http.Request) {
 	if !method(w, r, http.MethodGet) {
 		return
 	}
-	// Always aggregate all immediately available messages now.
-	msgs, err := h.SQS.ReceiveAll(r.Context(), 0)
+
+	h.mu.Lock()
+	svc := h.SQS
+	h.mu.Unlock()
+
+	msgs, err := svc.ReceiveAll(r.Context(), 0)
 	if err != nil {
-		h.Log.Error("failed to receive messages", "err", err)
+		h.Log.Error("failed to receive messages", "error", err)
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -78,8 +114,13 @@ func (h *APIHandler) handlePurge(w http.ResponseWriter, r *http.Request) {
 	if !method(w, r, http.MethodPost) {
 		return
 	}
-	if err := h.SQS.Purge(r.Context()); err != nil {
-		h.Log.Error("failed to purge queue", "err", err)
+
+	h.mu.Lock()
+	svc := h.SQS
+	h.mu.Unlock()
+
+	if err := svc.Purge(r.Context()); err != nil {
+		h.Log.Error("failed to purge queue", "error", err)
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -91,8 +132,57 @@ func (h *APIHandler) handleInfo(w http.ResponseWriter, r *http.Request) {
 	if !method(w, r, http.MethodGet) {
 		return
 	}
-	info := h.SQS.Info(r.Context())
+
+	h.mu.Lock()
+	svc := h.SQS
+	h.mu.Unlock()
+
+	info := svc.Info(r.Context())
 	writeJSON(w, http.StatusOK, info)
+}
+
+// handleChangeQueue updates the SQS queue at runtime.
+func (h *APIHandler) handleChangeQueue(w http.ResponseWriter, r *http.Request) {
+	if !method(w, r, http.MethodPost) {
+		return
+	}
+
+	var body struct {
+		QueueName string `json:"queue_name"`
+		QueueURL  string `json:"queue_url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if body.QueueName == "" && body.QueueURL == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "queue_name or queue_url must be provided"})
+		return
+	}
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	ctx := r.Context()
+	awsCfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		h.Log.Warn("failed to reload AWS config", "error", err)
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "could not reload AWS config"})
+		return
+	}
+
+	client := sqs.NewFromConfig(awsCfg)
+	newSvc := service.NewSQSService(ctx, client, body.QueueName, body.QueueURL, awsCfg.Region, h.Log)
+	h.SQS = newSvc
+
+	h.Log.Info("SQS queue updated at runtime", "queue_name", newSvc.QueueName, "queue_url", newSvc.QueueURL)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":      "ok",
+		"queue_name":  newSvc.QueueName,
+		"queue_url":   newSvc.QueueURL,
+		"reconnected": newSvc.QueueURL != "",
+	})
 }
 
 // handleHealth returns a simple liveness probe and version info.

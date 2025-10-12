@@ -1,0 +1,28 @@
+# .air.toml
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  # Command to build your app
+  cmd = "go build -o ./tmp/sqs-ui ./cmd/server"
+
+  # Binary that Air should run after building
+  bin = "tmp/sqs-ui"
+
+  # File extensions to watch
+  include_ext = ["go"]
+
+  # Directories to ignore (no rebuilds triggered)
+  exclude_dir = ["tmp", "bin", "dist", "vendor"]
+
+  # Delay between rebuilds (ms)
+  delay = 1000
+
+[log]
+  time = true
+
+[color]
+  main = "yellow"
+  watcher = "cyan"
+  build = "green"
+  runner = "magenta"

@@ -20,6 +20,7 @@ profile.cov
 bin/
 build/
 dist/
+tmp/
 
 # Logs and temporary files
 *.log
