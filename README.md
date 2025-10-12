@@ -93,13 +93,24 @@ go build -o sqs-ui ./cmd/server
 
 Pull & run:
 ```bash
+
+# Full configs is they are already exported, if not add them
 docker run --rm -p 8080:8080 \
   -e QUEUE_NAME=my-queue \
-  -e AWS_REGION=us-east-1 \
-  -e AWS_ACCESS_KEY_ID=XXX \
-  -e AWS_SECRET_ACCESS_KEY=YYY \
-  -e AWS_PROFILE=profile \
-  ghcr.io/pachecoc/sqs-ui:0.2.0
+  -e AWS_REGION \
+  -e AWS_ACCESS_KEY_ID \
+  -e AWS_SECRET_ACCESS_KEY \
+  --name sqs-ui \
+  pachecoc/sqs-ui:0.2.0
+
+# If AWS SSO, you can still start without queue name or url but it will show error
+docker run --rm -p 8080:8080 \
+  -e AWS_REGION \
+  -e AWS_ACCESS_KEY_ID \
+  -e AWS_SECRET_ACCESS_KEY \
+  -e AWS_SESSION_TOKEN \
+  --name sqs-ui \
+  pachecoc/sqs-ui:0.2.0
 ```
 
 ---

@@ -36,6 +36,10 @@ dev:
 	fi
 	@export $$(grep -v '^#' .env | xargs) && air
 
+run-docker:
+	@echo "Running sqs-ui in Docker..."
+	docker run --rm -p 8080:8080 -e AWS_REGION -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e SQS_QUEUE_URL $(IMAGE_NAME):latest
+
 # ------------------------------------------
 # Clean Targets
 # ------------------------------------------
