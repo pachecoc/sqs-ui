@@ -1,10 +1,12 @@
-# SQS UI
+# 📨 SQS UI
 
 A lightweight web UI + Go backend to inspect and interact with **AWS SQS** queues.
 
+> **Note:** This repository is under active development. It is not production ready.
+
 ---
 
-## 0.2.0 Highlights (since 0.1.x)
+## ✨ 0.2.0 Highlights (since 0.1.x)
 
 - Runtime queue switch dialog (update queue name or full queue URL without restarting).
 - Improved message sending flow with countdown + advisory about AWS SQS metric lag.
@@ -15,7 +17,7 @@ A lightweight web UI + Go backend to inspect and interact with **AWS SQS** queue
 
 ---
 
-## Project Structure
+## 🗂️ Project Structure
 
 | Path                | Purpose                                                   |
 | ------------------- | --------------------------------------------------------- |
@@ -30,7 +32,7 @@ A lightweight web UI + Go backend to inspect and interact with **AWS SQS** queue
 
 ---
 
-## UI Features
+## 💻 UI Features
 
 - Fetch queue info (region, URL, approximate counts, status).
 - Receive (peek) messages (non-destructive unless backend deletes—see notes).
@@ -42,7 +44,7 @@ A lightweight web UI + Go backend to inspect and interact with **AWS SQS** queue
 
 ---
 
-## API Endpoints (Current Assumed Set)
+## 🔌 API Endpoints (Current Assumed Set)
 
 | Method | Path                | Description                                                               |
 | ------ | ------------------- | ------------------------------------------------------------------------- |
@@ -55,7 +57,7 @@ A lightweight web UI + Go backend to inspect and interact with **AWS SQS** queue
 
 ---
 
-## Configuration (Env Vars)
+## ⚙️ Configuration (Env Vars)
 
 | Variable        | Description                                                                 | Default     |
 | --------------- | --------------------------------------------------------------------------- | ----------- |
@@ -69,13 +71,13 @@ A lightweight web UI + Go backend to inspect and interact with **AWS SQS** queue
 
 ---
 
-## Run Locally
+## 🏃 Run Locally
 
 ```bash
 # Using Makefile (ensure a queue exists or credentials allow create)
 export QUEUE_NAME=my-queue
 export AWS_REGION=us-east-1
-export AWS_PRODILE=example
+export AWS_PROFILE=example
 make run-local
 # Open:
 http://localhost:8080
@@ -89,12 +91,11 @@ go build -o sqs-ui ./cmd/server
 
 ---
 
-## Docker Usage
+## 🐳 Docker Usage
 
 Pull & run:
 ```bash
-
-# Full configs is they are already exported, if not add them
+# Full configs if they are already exported; if not, add them explicitly
 docker run --rm -p 8080:8080 \
   -e QUEUE_NAME=my-queue \
   -e AWS_REGION \
@@ -103,7 +104,7 @@ docker run --rm -p 8080:8080 \
   --name sqs-ui \
   pachecoc/sqs-ui:0.2.0
 
-# If AWS SSO, you can still start without queue name or url but it will show error
+# If AWS SSO / temp creds, you can still start without queue name or URL but UI will show an error until set
 docker run --rm -p 8080:8080 \
   -e AWS_REGION \
   -e AWS_ACCESS_KEY_ID \
@@ -115,7 +116,7 @@ docker run --rm -p 8080:8080 \
 
 ---
 
-## Credentials & Security
+## 🔐 Credentials & Security
 
 - Best: Use EKS Pod Identities or IAM roles (EC2, ECS, IRSA, etc.).
 - Avoid committing credentials.
@@ -124,15 +125,15 @@ docker run --rm -p 8080:8080 \
 
 ---
 
-## SQS Semantics & Consistency
+## ⏱️ SQS Semantics & Consistency
 
 - `NumberOfMessages` is eventually consistent; newly sent or received messages may not reflect instantly.
-- Receiving messages makes them temporarily invisible for their visibility timeout; they are not deleted unless explicitly deleted (or your server logic deletes on receive—verify your implementation).
+- Receiving messages makes them temporarily invisible for their visibility timeout; they are not deleted unless explicitly deleted (or your server logic deletes on receive—verify your implementation[...]
 - Purge is asynchronous; large queues may take seconds to clear.
 
 ---
 
-## (Future Work / Suggestions)
+## 🧭 (Future Work / Suggestions)
 
 | Item                                 | Rationale                                           |
 | ------------------------------------ | --------------------------------------------------- |
@@ -149,7 +150,7 @@ docker run --rm -p 8080:8080 \
 
 ---
 
-## Development
+## 🧪 Development
 
 | Task         | Command            |
 | ------------ | ------------------ |
@@ -163,7 +164,7 @@ docker run --rm -p 8080:8080 \
 
 ---
 
-## Build Metadata
+## 🏗️ Build Metadata
 
 Injected at build time (see Dockerfile):
 - `Version`
@@ -172,19 +173,19 @@ Injected at build time (see Dockerfile):
 
 ---
 
-## FAQ
+## ❓ FAQ
 
-**Why do counts not update immediately after sending a message?**
+**Why do counts not update immediately after sending a message?**  
 SQS attributes are approximate and eventually consistent; refresh again after a few seconds.
 
-**Why did a fetched message “disappear”?**
+**Why did a fetched message “disappear”?**  
 It’s in-flight (invisible) due to receive; it reappears after the visibility timeout unless deleted.
 
-**Can I view messages without impacting visibility?**
+**Can I view messages without impacting visibility?**  
 Pure “peek” isn’t natively supported by SQS. Standard receive temporarily hides messages.
 
 ---
 
-## License
+## 📄 License
 
 MIT © Gustavo Pacheco
