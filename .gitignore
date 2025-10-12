@@ -1,34 +1,21 @@
-# -------------------------------
-# 🧱 Go + Docker + Web App Gitignore
-# -------------------------------
+# ==========================================
+# Go + Docker + Web App Gitignore
+# ==========================================
+# This file helps keep your repository clean.
+# Most patterns here are also useful in .dockerignore (but .dockerignore controls Docker build context).
 
-# Binaries for programs and plugins
+# ------------------------------------------
+# Go build artifacts, dependencies, and cache
+# ------------------------------------------
 *.exe
 *.dll
 *.so
 *.dylib
-sqs-ui
-
-# Test binaries and coverage files
 *.test
 *.out
 *.coverprofile
 coverage.*
 profile.cov
-
-# Build output directories
-bin/
-build/
-dist/
-
-# Logs and temporary files
-*.log
-*.swp
-*.swo
-
-# Environment files
-.env
-.env.local
 
 # Go workspace files
 go.work
@@ -36,13 +23,39 @@ go.work.sum
 
 # Dependency directories
 vendor/
-node_modules/
-helm/
 
-# IDE/editor settings
+# ------------------------------------------
+# Build output directories
+# ------------------------------------------
+bin/
+build/
+dist/
+tmp/
+
+# ------------------------------------------
+# Logs & temporary files
+# ------------------------------------------
+*.log
+*.swp
+*.swo
+*.tmp
+
+# ------------------------------------------
+# Environment files
+# ------------------------------------------
+.env
+.env.*
+# Optionally add more env files if needed
+
+# ------------------------------------------
+# Editor/IDE settings
+# ------------------------------------------
 .vscode/
 .idea/
+.DS_Store          # MacOS Finder file
 
-# Misc
-*.md~
-*.tmp
+# ------------------------------------------
+# Node/Frontend dependencies
+# ------------------------------------------
+node_modules/
+helm/

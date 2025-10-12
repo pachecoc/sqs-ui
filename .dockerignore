@@ -1,14 +1,50 @@
+# ==============================
+# Docker Ignore File for SQS-UI
+# ==============================
+# This file controls what files are sent to the Docker build context.
+# Many patterns are already excluded in .gitignore.
+# Only include here what should NOT be sent to the Docker context.
+
+# ------------------------------
+# Version control & metadata
+# ------------------------------
 .git
-.gitignore
-Dockerfile
-bin
-dist
-build
-coverage*
-*.md
-*.log
-node_modules
+.gitignore   # Optional: not strictly needed, but can help keep context clean
+
+# ------------------------------
+# Build output & binary artifacts
+# ------------------------------
+bin/
+dist/
+build/
+tmp/         # Air tmp directory (live reload)
+coverage*    # Coverage reports (if generated)
+
+# ------------------------------
+# Node & frontend dependencies
+# ------------------------------
+node_modules/
+
+# ------------------------------
+# Editor & OS artifacts
+# ------------------------------
 *.swp
 *.swo
+.DS_Store    # MacOS Finder file
+
+# ------------------------------
+# Environment files
+# ------------------------------
 .env
 .env.*
+
+# ------------------------------
+# Documentation & logs
+# ------------------------------
+*.md         # Remove if you want docs in Docker context
+*.log
+
+# ------------------------------
+# Docker build files
+# ------------------------------
+Dockerfile   # Only ignore if not using multi-stage builds from this file
